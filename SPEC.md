@@ -57,6 +57,24 @@ Sequence: tap person (select) → tap boat seat (load, person hops in) → repea
 - Test canvas resize on orientation change explicitly, don't leave it for last
 - Isometric camera, fixed framing that keeps both banks + boat visible on a portrait phone screen without the player needing to pan/zoom
 
+## Visual style direction — Phase 2 revision (art-direction fix)
+The first Phase 2 pass came back looking like generic rounded 3D-mascot stock art (smooth capsule bodies, soft gradient shading, oversized background props) instead of the intended Crossy Road voxel look. Concrete fixes for the rebuild:
+
+**Geometry — rebuild characters from cubes, not capsules/spheres.**
+No rounded bodies. Each character = a small stack of BoxGeometry primitives: a cube head, a slightly larger rectangular torso block (this carries the couple's color), simple rectangular arm/leg blocks, small block feet/shoes in a contrasting dark color. Hard edges throughout, no bevel/smoothing on the silhouette.
+
+**Shading — flat shading, not smooth PBR gradients.**
+Use flatShading: true (or a toon/cel material) so each cube face reads as one flat color/brightness value. This is what actually produces the voxel look — smooth shading on any geometry, rounded or not, gives the generic "stock 3D icon" gradient look we're trying to avoid.
+
+**Scale — props must never dominate characters.**
+Rocks, bushes, cattails etc. should read as small background/foreground accents, roughly a fraction of character height, never towering over them. Set an explicit scale reference (e.g., character height = 1 unit) and keep all decorative props well under that unless they're clearly background scenery (trees) set back from the play area.
+
+**Color & lighting — bump saturation, add real light/shadow contrast.**
+Increase saturation across the palette (grass, water, couple colors) beyond the current mid-tone values. Light the scene with a clear key + fill setup (warm directional key light, cooler ambient/fill) so each cube face shows a visible light-side/shadow-side split — that contrast is what gives voxel scenes their bright, "happy toy diorama" mood, and it's currently flat/absent.
+
+**Grounding — add a soft contact shadow under every character/object.**
+A simple soft dark blurred circle (decal or transparent plane) under each character's feet, matching the reference's grounded feel. Currently characters read as slightly floating.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
