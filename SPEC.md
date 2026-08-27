@@ -57,23 +57,28 @@ Sequence: tap person (select) → tap boat seat (load, person hops in) → repea
 - Test canvas resize on orientation change explicitly, don't leave it for last
 - Isometric camera, fixed framing that keeps both banks + boat visible on a portrait phone screen without the player needing to pan/zoom
 
-## Visual style direction — Phase 2 revision (art-direction fix)
-The first Phase 2 pass came back looking like generic rounded 3D-mascot stock art (smooth capsule bodies, soft gradient shading, oversized background props) instead of the intended Crossy Road voxel look. Concrete fixes for the rebuild:
+## Visual style direction — Phase 3 revision (v2 art-direction fixes)
 
-**Geometry — rebuild characters from cubes, not capsules/spheres.**
-No rounded bodies. Each character = a small stack of BoxGeometry primitives: a cube head, a slightly larger rectangular torso block (this carries the couple's color), simple rectangular arm/leg blocks, small block feet/shoes in a contrasting dark color. Hard edges throughout, no bevel/smoothing on the silhouette.
+**Voxel density — characters need far more detail, not just primitive blocks.**
+Current characters are ~5 flat boxes and read as crude, not voxel-rich. Rebuild each character from many smaller voxel cubes: separate small cubes for eyes (white base + black pupil), a distinct color band at the collar/waist to break up the torso into two tones, small accent cubes for hair/hat detail, and clearly separated shoe-sole blocks in a contrasting dark color. Look at the reference characters' actual voxel count — they're assembled from dozens of small cubes, not a handful of large primitives.
 
-**Shading — flat shading, not smooth PBR gradients.**
-Use flatShading: true (or a toon/cel material) so each cube face reads as one flat color/brightness value. This is what actually produces the voxel look — smooth shading on any geometry, rounded or not, gives the generic "stock 3D icon" gradient look we're trying to avoid.
+**Water — make it flat and stylized, not a realistic gradient.**
+Replace the current smooth navy gradient water with a flat, bright cyan/turquoise color (no gradient, no realistic depth shading). Add hard-edged white foam/wave shapes as flat geometric patterns on the surface, matching the crisp turquoise water blocks in the reference images — not a smooth realistic ocean look.
 
-**Scale — props must never dominate characters.**
-Rocks, bushes, cattails etc. should read as small background/foreground accents, roughly a fraction of character height, never towering over them. Set an explicit scale reference (e.g., character height = 1 unit) and keep all decorative props well under that unless they're clearly background scenery (trees) set back from the play area.
+**Shadows — hard-edged, not soft/blurred.**
+Turn off soft shadow blur entirely (disable PCF softening / shadow radius) so shadows read as crisp, hard-edged flat shapes under each character and object, matching the reference's sharp shadow blobs. If true shadow maps keep coming out soft, fake it instead with a simple flat dark decal shape under each character's feet.
 
-**Color & lighting — bump saturation, add real light/shadow contrast.**
-Increase saturation across the palette (grass, water, couple colors) beyond the current mid-tone values. Light the scene with a clear key + fill setup (warm directional key light, cooler ambient/fill) so each cube face shows a visible light-side/shadow-side split — that contrast is what gives voxel scenes their bright, "happy toy diorama" mood, and it's currently flat/absent.
+**Shading contrast — shadow-side faces are currently too dark.**
+Right now the darker cube faces are going close to black, losing all color information. Shadow-side faces should read as a darker tint of the same hue (e.g., darker green, not near-black), not a different near-black color. Raise ambient/fill light so no face drops much below roughly half the brightness of the lit face.
 
-**Grounding — add a soft contact shadow under every character/object.**
-A simple soft dark blurred circle (decal or transparent plane) under each character's feet, matching the reference's grounded feel. Currently characters read as slightly floating.
+**Overall brightness — scene needs to be brighter and punchier.**
+Increase global light intensity / exposure and boost saturation across the whole palette (grass, water, couple colors). The reference images read as bright and cheerful at a glance; the current pass reads muted and dim by comparison.
+
+**Add environment props for charm.**
+Scatter simple blocky trees (stacked cube trunk + cube foliage, like the reference tree), small bushes, and flowers around the play area at a scale clearly smaller than the characters — this is currently missing and the reference relies on these small touches for its charm.
+
+**Palette — use a small, deliberately curated set of fully-saturated colors, not defaults.**
+Define an explicit limited palette up front (roughly 6-8 named colors total) rather than letting materials default to whatever mid-tone values come out of the color picker: two bright grass-green shades for the checkerboard tiles, one saturated cyan-turquoise for water, one warm mid-brown for wood/boat, and fully-saturated (not pastel, not muddy) red/green/blue for the couples. Every color in the scene should be either one of these or a close variant — avoid any grayish, muddy, or desaturated tones creeping in anywhere except thin dirt/soil trim strips. This consistency (not just individual color brightness) is what makes the reference read as polished rather than default-generated.
 
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
