@@ -113,6 +113,20 @@ The user confirmed the camera angle via a screenshot of the app itself, so this 
 
 **Off-screen couples at default zoom (real bug).** After locking the tighter framing in Phase 7, the triangle layout's back-corner couples (spread to z = ±2.6) exceeded the visible horizontal frustum at the zoom level needed to hide the ground boundary — on some phone aspect ratios one whole couple could render entirely off-screen until the player zoomed out manually. Root-caused by projecting each character's screen-space bounds directly (not by eyeballing screenshots) across several real phone aspect ratios (390×844, 412×915, 375×812). Fixed by narrowing the triangle's spread (back corners now at z = ±0.85/±1.35) and shifting the camera's look-at target off the world's Z origin to recenter the framing — the two back corners don't sit symmetrically on screen around world Z=0 given this camera's azimuth, so centering the target on the content (not the origin) was required, not just a bigger frustum. Verified with margin on all three tested aspect ratios.
 
+## Engine wiring (Phase 9) — real game, not a prototype
+
+The look-dev artifact's visual language (palette, geometry builders, camera, lighting, character rig, boat, banks) is now ported into the actual Vite/TypeScript app under `src/scene/` and `src/ui/`, driven by the real rule engine from Phase 1 (`src/engine/`) via a new orchestrator, `src/game/Game.ts` — not the artifact's free-roam local state machine. `src/scene.ts` (the Phase 0 placeholder) is gone.
+
+**Bank-side mapping.** The engine always starts everyone in its own `left` bank; the art direction wants play to start on the bank nearest the camera (world-space positive X). These are different axes — `src/scene/layout.ts` defines `WorldSide` independently of the engine's `BankSide`, and `Game.ts` is the one place that translates between them (engine `'left'` → world `'right'`, i.e. the near/starting bank).
+
+**Boarding/rowing.** Tapping an idle character on the boat's current (engine-side-translated) bank calls the engine's real `board()`; tapping a seated character calls `unboard()`. Both mutate `Game`'s `engineState` immediately — the walk animation is purely visual and follows from that state change, not the other way around. The Row button calls the engine's real `row()` and gets back a `RowOutcome` used to drive everything downstream: a departure violation shows the kiss sequence instantly (the boat never actually leaves the dock, matching the engine's own "catch it the instant it pushes off" semantics — no crossing animation plays); a safe or arrival-violated row animates the boat crossing first, and only reveals the outcome (normal disembark, kiss sequence, or win) once that animation completes.
+
+**Violation → kiss → game over.** On a violation, `Game.ts` reads the actual violated bank `Set<PersonId>` from the engine's own outcome (not a re-derived guess) to find every man present and the unattended woman, exactly matching `checkViolation`'s rule. The reacting men walk to her with the same stride-cycle animation used for boarding; once all have arrived, a heart sprite pops in with a synced "smooch" sound cue, holds ~2.2s, then the "Couldn't Stop the Cheater!" game-over panel fades in with a Retry button that resets both the engine state (`createInitialState()`) and every character's visual position/rotation in one call.
+
+**Win screen.** Deliberately left as an undesigned placeholder (reuses the game-over panel's visual language with different copy) — real design is a follow-up, but it isn't a dead end: Retry works from it too.
+
+Verified end-to-end against a known violation scenario (driven directly through the engine, not guessed): board a single person alone, confirm the departure violation fires with the exact expected unattended woman and reacting men, confirm the kiss sequence and game-over panel appear, confirm Retry fully resets engine and visual state. `tsc --noEmit`, the 12 engine unit tests, and `vite build` all pass clean.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads

@@ -1,3 +1,13 @@
+:root {
+  --ink: #0e2027;
+  --panel: rgba(15, 42, 55, 0.86);
+  --panel-border: rgba(255, 255, 255, 0.1);
+  --accent: #ffc145;
+  --accent-ink: #3a2600;
+  --text: #f4fbff;
+  --text-muted: #9fc4d1;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -9,9 +19,10 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  background: #0d1b2a;
+  background: var(--ink);
   touch-action: none;
   overscroll-behavior: none;
+  font-family: "Nunito", ui-sans-serif, system-ui, sans-serif;
 }
 
 #app {
@@ -24,4 +35,128 @@ body {
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
+}
+
+/* ---------- HUD ---------- */
+
+#row-btn {
+  position: fixed;
+  left: 50%;
+  bottom: clamp(68px, 11vh, 104px);
+  transform: translateX(-50%) scale(1);
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 26px 13px 18px;
+  border-radius: 999px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+  color: var(--text-muted);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  opacity: 0.5;
+  transition:
+    opacity 0.25s ease,
+    background 0.25s ease,
+    color 0.25s ease;
+}
+
+#row-btn svg {
+  width: 22px;
+  height: 22px;
+  flex: none;
+}
+
+#row-btn.enabled {
+  opacity: 1;
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, #ffd466, var(--accent));
+  border-color: rgba(255, 255, 255, 0.4);
+  animation: rowPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes rowPulse {
+  0%,
+  100% {
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(1.055);
+  }
+}
+
+/* ---------- end-of-run panels ---------- */
+
+.end-panel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 24px;
+  background: rgba(8, 16, 20, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s ease;
+}
+
+.end-panel.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.end-eyebrow {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.end-panel h2 {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: clamp(26px, 7vw, 40px);
+  color: var(--text);
+  max-width: 340px;
+  text-wrap: balance;
+}
+
+.end-panel--win .end-eyebrow {
+  color: #7ee84b;
+}
+
+.end-panel button {
+  margin-top: 6px;
+  padding: 16px 40px;
+  border: none;
+  border-radius: 999px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 19px;
+  letter-spacing: 0.02em;
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, #ffd466, var(--accent));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+.end-panel button:active {
+  transform: translateY(1px);
 }

@@ -1,5 +1,5 @@
 import "./style.css";
-import { GameScene } from "./scene";
+import { Game } from "./game/Game";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
-new GameScene(app);
+new Game(app);
