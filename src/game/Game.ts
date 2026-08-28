@@ -90,6 +90,8 @@ export class Game {
   private boatCrossT = 0;
   private boatCrossStart = 0;
   private readonly boatCrossDur = 2.0;
+  private crossFromWorld: WorldSide = "right";
+  private crossToWorld: WorldSide = "left";
   private pendingOutcome: RowOutcome | null = null;
 
   private gamePhase: GamePhase = "boarding";
@@ -278,18 +280,18 @@ export class Game {
   private onRowClicked(): void {
     if (this.gamePhase !== "boarding" || this.engineState.boat.size === 0) return;
 
+    // Capture the crossing direction before rowing: on a departure
+    // violation the engine voids the trip and leaves boatSide unchanged,
+    // so we can't derive "where the boat is headed" from engineState
+    // after the fact. The rowing animation always plays in full — the
+    // kiss check only happens once it's done, on whichever bank(s) it
+    // turns out to apply to.
+    const originWorldSide = toWorldSide(this.engineState.boatSide);
+    this.crossFromWorld = originWorldSide;
+    this.crossToWorld = originWorldSide === "left" ? "right" : "left";
+
     const outcome = row(this.engineState);
     this.engineState = outcome.state;
-
-    if (outcome.violatedAt === "departure") {
-      // The engine's departure check fires the instant the boat pushes
-      // off — the boat never actually leaves the dock, so there's no
-      // crossing animation here, straight into the kiss sequence.
-      const engineSide: BankSide = outcome.departureViolation.left ? "left" : "right";
-      this.beginKissSequence(engineSide);
-      this.updateRowButton();
-      return;
-    }
 
     this.gamePhase = "crossing";
     this.boatMoving = true;
@@ -301,29 +303,40 @@ export class Game {
 
   private finishCrossing(): void {
     this.boatMoving = false;
-    this.dockBoat();
     const outcome = this.pendingOutcome!;
     this.pendingOutcome = null;
 
-    const newWorldSide = toWorldSide(this.engineState.boatSide);
+    if (outcome.violatedAt === "departure") {
+      // The engine voided this trip — boatSide never changed — but we
+      // still animated the row for visual continuity, so leave the boat
+      // parked at the far dock the animation carried it to rather than
+      // snapping it back to where engineState says it "really" is.
+      this.boat.position.set(dockXFor(this.crossToWorld), 0.05, 0);
+      this.boat.rotation.set(0, 0, 0);
+    } else {
+      this.dockBoat();
+    }
+
     for (let seatIdx = 0; seatIdx < 2; seatIdx++) {
       const id = this.boatSeatOccupant[seatIdx];
       if (!id) continue;
       this.boatSeatOccupant[seatIdx] = null;
-      const entry = this.chars.get(id)!;
-      entry.seatIndex = -1;
-      if (outcome.violatedAt !== "arrival") {
-        const slot = homeSlot(id, newWorldSide);
+      if (!outcome.violated) {
+        const entry = this.chars.get(id)!;
+        entry.seatIndex = -1;
+        const slot = homeSlot(id, this.crossToWorld);
         entry.state = "walkingToBank";
         this.startWalk(entry, new THREE.Vector3(slot.x, CHAR_HEIGHT_Y, slot.z), 0.8);
       }
-      // If arrival-violated, leave them where they are for a beat —
-      // beginKissSequence() below redirects the reacting men and leaves
-      // everyone else (including these two) to resolve visually in place.
+      // If violated, leave them seated (their entry.seatIndex stays valid so
+      // updateCharacter can keep positioning them on the boat) — beginKissSequence()
+      // below redirects the reacting men and leaves everyone else, including
+      // these two, to resolve visually in place.
     }
 
-    if (outcome.violatedAt === "arrival" && outcome.arrivalViolation) {
-      const engineSide: BankSide = outcome.arrivalViolation.left ? "left" : "right";
+    if (outcome.violatedAt) {
+      const violation = outcome.violatedAt === "departure" ? outcome.departureViolation : outcome.arrivalViolation!;
+      const engineSide: BankSide = violation.left ? "left" : "right";
       this.beginKissSequence(engineSide);
     } else if (outcome.win) {
       this.gamePhase = "win";
@@ -420,10 +433,8 @@ export class Game {
     if (this.boatMoving) {
       this.boatCrossT = Math.min((t - this.boatCrossStart) / this.boatCrossDur, 1);
       const ep = this.boatCrossT < 0.5 ? 2 * this.boatCrossT * this.boatCrossT : 1 - Math.pow(-2 * this.boatCrossT + 2, 2) / 2;
-      const fromSide = toWorldSide(this.engineState.boatSide === "left" ? "right" : "left");
-      const toSide = toWorldSide(this.engineState.boatSide);
-      const fromX = dockXFor(fromSide);
-      const toX = dockXFor(toSide);
+      const fromX = dockXFor(this.crossFromWorld);
+      const toX = dockXFor(this.crossToWorld);
       this.boat.position.x = fromX + (toX - fromX) * ep;
       if (this.boatCrossT >= 1) this.finishCrossing();
     }
