@@ -30,6 +30,9 @@ import { homeSlot, CHAR_HEIGHT_Y, type WorldSide } from "../scene/layout";
 import { PALETTE } from "../scene/palette";
 import { playBoop, playGameOverSting, playSmooch } from "../scene/audio";
 import { createOverlay, type Overlay } from "../ui/overlay";
+import { fetchStats, postEvent } from "../net/api";
+import { generateShareImage } from "../share/shareImage";
+import { buildChallengeUrl, challengeBannerText, parseChallengeFromUrl, resultSentence } from "../share/challenge";
 
 type CharState = "idle" | "walkingToBoat" | "seated" | "walkingToBank" | "walkingToKiss" | "kissPose";
 
@@ -45,7 +48,7 @@ interface CharacterEntry {
   walkFacing: number;
 }
 
-type GamePhase = "boarding" | "crossing" | "kissing" | "gameover" | "win";
+type GamePhase = "intro" | "boarding" | "crossing" | "kissing" | "gameover" | "win";
 
 interface KissSequence {
   men: PersonId[];
@@ -97,6 +100,11 @@ export class Game {
   private gamePhase: GamePhase = "boarding";
   private kissSeq: KissSequence | null = null;
   private heartSprite: THREE.Sprite | null = null;
+
+  private moveCount = 0;
+  private startTimeMs: number | null = null;
+  private lastWinResult: { moves: number; timeSeconds: number } | null = null;
+  private shareBlob: Blob | null = null;
 
   private water: WaterHandle;
   private clouds: ReturnType<typeof scatterClouds>;
@@ -164,6 +172,7 @@ export class Game {
     this.overlay.rowButton.addEventListener("click", () => this.onRowClicked());
     this.overlay.retryButton.addEventListener("click", () => this.retry());
     this.updateRowButton();
+    this.setupGrowthAndSharing();
 
     this.canvas.addEventListener("pointerdown", (e) => {
       this.downX = e.clientX;
@@ -255,6 +264,7 @@ export class Game {
     const seatIdx = this.boatSeatOccupant[0] ? (this.boatSeatOccupant[1] ? -1 : 1) : 0;
     if (seatIdx === -1) return;
 
+    this.ensureTimerStarted();
     this.engineState = board(this.engineState, id);
     this.boatSeatOccupant[seatIdx] = id;
     entry.seatIndex = seatIdx;
@@ -314,6 +324,9 @@ export class Game {
       this.boat.position.set(dockXFor(this.crossToWorld), 0.05, 0);
       this.boat.rotation.set(0, 0, 0);
     } else {
+      // A departure violation voids the trip, so only a trip that actually
+      // happened counts as a move.
+      this.moveCount++;
       this.dockBoat();
     }
 
@@ -340,7 +353,11 @@ export class Game {
       this.beginKissSequence(engineSide);
     } else if (outcome.win) {
       this.gamePhase = "win";
-      this.overlay.showWin();
+      const timeSeconds = this.startTimeMs !== null ? (performance.now() - this.startTimeMs) / 1000 : 0;
+      this.lastWinResult = { moves: this.moveCount, timeSeconds };
+      postEvent("complete", timeSeconds);
+      this.overlay.showWin(this.lastWinResult);
+      this.pregenerateShareImage("");
     } else {
       this.gamePhase = "boarding";
     }
@@ -403,6 +420,88 @@ export class Game {
     this.overlay.hideGameOver();
     this.overlay.hideWin();
     this.updateRowButton();
+
+    this.moveCount = 0;
+    this.startTimeMs = null;
+    this.lastWinResult = null;
+    this.shareBlob = null;
+    postEvent("attempt");
+  }
+
+  private ensureTimerStarted(): void {
+    if (this.startTimeMs === null) this.startTimeMs = performance.now();
+  }
+
+  // ---------- growth & sharing ----------
+
+  private setupGrowthAndSharing(): void {
+    postEvent("attempt");
+
+    fetchStats().then((stats) => {
+      if (stats) this.overlay.setPlayCount(2000 + stats.plays);
+    });
+
+    const dummyFile = new File([""], "share.png", { type: "image/png" });
+    const canFileShare = !!(navigator.canShare && navigator.canShare({ files: [dummyFile] }));
+    this.overlay.setShareAvailable(canFileShare);
+
+    this.overlay.onNameChange((name) => this.pregenerateShareImage(name));
+    this.overlay.onShareClick(() => this.handleShareClick());
+    this.overlay.onDownloadClick(() => this.handleDownloadClick());
+    this.overlay.onCopyLinkClick(() => this.handleCopyLinkClick());
+
+    const challenge = parseChallengeFromUrl();
+    if (challenge) {
+      this.gamePhase = "intro";
+      this.overlay.showChallengeBanner(challengeBannerText(challenge), () => {
+        this.gamePhase = "boarding";
+      });
+    }
+  }
+
+  private async pregenerateShareImage(name: string): Promise<void> {
+    if (!this.lastWinResult) return;
+    const blob = await generateShareImage({ name, moves: this.lastWinResult.moves, timeSeconds: this.lastWinResult.timeSeconds });
+    this.shareBlob = blob;
+  }
+
+  private async handleShareClick(): Promise<void> {
+    if (!this.lastWinResult) return;
+    const name = this.overlay.getName();
+    const url = buildChallengeUrl({ name, moves: this.lastWinResult.moves, timeSeconds: this.lastWinResult.timeSeconds });
+    const text = resultSentence(name, this.lastWinResult.moves);
+    const files = this.shareBlob ? [new File([this.shareBlob], "stop-the-cheater.png", { type: "image/png" })] : [];
+
+    try {
+      if (files.length && navigator.canShare?.({ files })) {
+        await navigator.share({ files, text, url });
+      } else if (navigator.share) {
+        await navigator.share({ text, url });
+      }
+    } catch {
+      // user cancelled the share sheet — nothing to do
+    }
+  }
+
+  private handleDownloadClick(): void {
+    if (!this.shareBlob) return;
+    const url = URL.createObjectURL(this.shareBlob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "stop-the-cheater-result.png";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  private async handleCopyLinkClick(): Promise<void> {
+    if (!this.lastWinResult) return;
+    const url = buildChallengeUrl({ name: this.overlay.getName(), moves: this.lastWinResult.moves, timeSeconds: this.lastWinResult.timeSeconds });
+    try {
+      await navigator.clipboard.writeText(url);
+      this.overlay.flashCopied();
+    } catch {
+      // clipboard permission denied — no fallback needed for this vanity feature
+    }
   }
 
   private updateRowButton(): void {

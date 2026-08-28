@@ -137,6 +137,32 @@ Two related problems, both in `src/game/Game.ts`, found via manual play: crossin
 
 Verified via Playwright driving the exact reported repro sequence (send red-woman + green-woman across, green-woman returns alone, board green-woman + blue-man, row) — confirmed it previously threw under the row-animation-first change without the seat-index fix, and confirmed it now completes cleanly: crossing animation plays, boat parks at the far dock with the departing couple visible in it, the reacting men walk to the stranded woman, kiss, and game-over panel all fire correctly. Also re-verified, with no regressions: the known 11-move winning solution and the known arrival-bank-violation scenario from `rules.test.ts`, both end-to-end through the real UI, plus Retry resetting cleanly afterward. `tsc --noEmit`, all 12 engine unit tests, and `vite build` pass clean.
 
+## Growth & sharing features
+
+**Global play counter**
+Display "<N> people have tried" where N = 2000 + realCount (realCount from the backend). Always additive, no threshold/branching logic needed. Fetched async on load — never blocks game start; the badge appears once it resolves (and simply never appears if the backend is offline).
+
+**Backend**
+Redis is provisioned on Upstash (REST-based `@upstash/redis` client, no persistent connections), credentials via `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` env vars. Two Vercel serverless functions under `api/`, deployed alongside the static site — no Next.js or other framework:
+- `POST /api/event` — body `{type: 'attempt' | 'complete', timeSeconds?}`. On `'attempt'`, atomic `INCR` on a plays counter. On `'complete'`, atomic `INCR` on a completions counter, plus a plain get-compare-set against a best-time key (update if the new time is lower or unset) — no transactions/locking, this is a vanity stat, not a competitive leaderboard.
+- `GET /api/stats` — returns `{ plays, completions, bestTime }`.
+
+There is deliberately no "best moves" stat anywhere — this puzzle has a fixed 11-move optimal solution, so that number hits its ceiling once and never moves again; best time is the only global stat worth tracking.
+
+**Result / score screen (on win)**
+Shows "YOU SAVED THEM", move count, and time (e.g. "13.82 seconds"), plus an optional name field ("Enter your name (optional)"). Generated wording: "I solved it in 11 moves." if left blank, "<Name> solved it in 11 moves." if filled — phrased as a personal achievement, not an ad for the game.
+
+**Shareable result image**
+Generated entirely client-side via Canvas 2D — never a screenshot of the live Three.js canvas (would require `preserveDrawingBuffer` at renderer-creation time, an ongoing perf cost not worth paying for this). A single background image asset (currently a placeholder SVG at `public/share-bg.svg`, swappable later) is drawn via `drawImage`, then name/moves/time are overlaid with native Canvas `fillText` — no HTML-to-canvas rasterization. Waits on `document.fonts.ready` (plus explicit `document.fonts.load(...)` calls for the exact weights/sizes used) before drawing text, so the custom web fonts are actually applied rather than silently falling back to a system font.
+
+**Sharing**
+Uses the Web Share API (`navigator.share`) with the generated image, share text, and challenge URL. Feature-detects `navigator.canShare({files: [...]})` before attempting file sharing (a dummy `File` is used for the detection check, independent of whether the real image has finished generating) and falls back to "Download image" + "Copy link" buttons when file sharing isn't available. The share image is pre-generated as soon as the win screen appears (and regenerated, debounced, whenever the name field changes) rather than at share-button-tap time, so the actual `share()` call fires immediately on tap with no async gap that could lose user-activation in picky browsers.
+
+**Challenge URL**
+Result state is encoded in query params, e.g. `?name=Sanjeev&moves=11&time=13.82`. On load, if valid params are present, an intro banner reads "<Name> solved it in <N> moves. Can you beat them?" and gates input until dismissed — no separate challenge mode, just a banner/intro state ahead of normal play. No server-side validation of these values — a hand-edited URL producing a fake score is harmless, this isn't a security-sensitive leaderboard. The name is always bound via `textContent` (never `innerHTML`, since it's untrusted input from the URL) and capped to 20 characters before display so a long or garbage string can't break the layout; malformed/out-of-range `moves` or `time` values simply suppress the banner instead of showing.
+
+**No refresh-based anti-cheat.** No localStorage-based timer-persistence-across-refresh logic — the score doesn't need that level of integrity protection.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
