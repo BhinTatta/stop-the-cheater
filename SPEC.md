@@ -85,6 +85,18 @@ Scatter several more trees around the edges of the play area (not just one or tw
 
 **Boarding interaction (first pass).** Tapping an idle character on the boat's current bank walks them to an open seat (with a stride cycle — leg/arm swing, a small step bob, a slight waddle sway) and seats them; tapping a seated character (boat still docked) walks them back off. A row button — styled consistent with the rest of the HUD, pulses when at least one seat is occupied — animates the boat crossing; on arrival, seated characters disembark with the same walk cycle. This is a visual/interaction prototype only, not yet wired to the real rule engine from Phase 1 — that wiring happens when this moves into the actual Vite/Three.js app.
 
+## Visual style & interaction — Phase 6 revision
+
+**Start on the near bank.** All 6 characters — and the boat's initial dock — now start on the bank closest to the fixed camera, so faces are visible from the first frame. Trees stay on the far bank (unchanged); the near bank keeps its low bushes.
+
+**Boat docking, no clipping.** The dock positions are computed from the boat's own half-length against the water plane's edge, so the hull's outer edge touches the bank exactly instead of overlapping into the bank tiles.
+
+**Characters face the camera.** Idle and seated characters hold a fixed facing toward the camera (computed once from the camera's angle) instead of retaining whatever direction their last walk left them pointed — no more characters standing sideways.
+
+**Larger world, smaller characters.** Character scale and the camera's zoom were both pulled back further, and bank-slot spacing widened, so couples read as separated individuals rather than a congested cluster.
+
+**Fixed home slots.** Each character now has a permanent home index (0-5, mirrored per bank) instead of claiming whichever bank slot happens to be free. A character always returns to the same numbered spot on whichever bank they're standing on, so couples don't visually "shuffle" across multiple crossings.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
