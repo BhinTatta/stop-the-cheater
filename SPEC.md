@@ -71,6 +71,20 @@ Rebuild the boat as a proper small voxel hull: tapered/pointed bow, flat stern, 
 **Trees — add more, and cluster them like the reference.**
 Scatter several more trees around the edges of the play area (not just one or two), with the same stacked-cube-trunk-and-foliage construction already established, varying size slightly for visual interest. Reference the tree density and placement pattern in the attached Crossy Road image.
 
+## Visual style & interaction — Phase 5 revision
+
+**Female silhouette.** Women get a flared two-tone skirt (a stepped hip block + a wider hem block, plus a trim-color hem stripe) instead of separate leg blocks, so gender reads from silhouette alone, not just color.
+
+**Trees only on the far bank.** The camera is fixed, and any tree on the near bank sits between the camera and the whole play area. Trees stay on the far bank only; the near bank gets low bushes instead, which never block the view.
+
+**World scale.** The bank grid extends far past the camera frame in every direction (not just the playable strip), and the camera pulled back slightly — no visible edge where ground meets sky, and characters read as standing in a real landscape rather than on a floating tile.
+
+**Boat — two seats, real shape.** Rebuilt with a proper tapered hull (flat stern to a rounded bow across six stepped segments), raised gunwale walls, a trim stripe, and two distinct bench seats matching the boat's 2-person capacity.
+
+**Blocky shadows, grounded idle.** Contact shadows are flat rectangles sized to each object's footprint, not soft circular blobs. Idle characters no longer bob vertically — feet stay planted; personality instead comes from a slow idle head-turn and a subtle arm sway, both driven from real shoulder/neck pivot joints on the character rig.
+
+**Boarding interaction (first pass).** Tapping an idle character on the boat's current bank walks them to an open seat (with a stride cycle — leg/arm swing, a small step bob, a slight waddle sway) and seats them; tapping a seated character (boat still docked) walks them back off. A row button — styled consistent with the rest of the HUD, pulses when at least one seat is occupied — animates the boat crossing; on arrival, seated characters disembark with the same walk cycle. This is a visual/interaction prototype only, not yet wired to the real rule engine from Phase 1 — that wiring happens when this moves into the actual Vite/Three.js app.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
