@@ -107,6 +107,12 @@ The user confirmed the camera angle via a screenshot of the app itself, so this 
 
 **Couple layout — triangle, not a line.** The three couples stand at the corners of a triangle rather than in a single row: one couple near the water (closest to the boat), the other two spread wide at the back corners. Far-bank tree placement was thinned near where the back-corner couples land after crossing, so there's real room once they arrive.
 
+## Camera & framing — corrections (Phase 8)
+
+**Camera side.** The initial camera azimuth approached from the wrong side; flipped to approach from the right, per direction. The key/fill lights and the character "face the camera" calculation are all derived from the camera's position, so they followed the flip automatically — nothing needed a separate fix.
+
+**Off-screen couples at default zoom (real bug).** After locking the tighter framing in Phase 7, the triangle layout's back-corner couples (spread to z = ±2.6) exceeded the visible horizontal frustum at the zoom level needed to hide the ground boundary — on some phone aspect ratios one whole couple could render entirely off-screen until the player zoomed out manually. Root-caused by projecting each character's screen-space bounds directly (not by eyeballing screenshots) across several real phone aspect ratios (390×844, 412×915, 375×812). Fixed by narrowing the triangle's spread (back corners now at z = ±0.85/±1.35) and shifting the camera's look-at target off the world's Z origin to recenter the framing — the two back corners don't sit symmetrically on screen around world Z=0 given this camera's azimuth, so centering the target on the content (not the origin) was required, not just a bigger frustum. Verified with margin on all three tested aspect ratios.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
