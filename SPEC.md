@@ -57,28 +57,19 @@ Sequence: tap person (select) → tap boat seat (load, person hops in) → repea
 - Test canvas resize on orientation change explicitly, don't leave it for last
 - Isometric camera, fixed framing that keeps both banks + boat visible on a portrait phone screen without the player needing to pan/zoom
 
-## Visual style direction — Phase 3 revision (v2 art-direction fixes)
+## Visual style direction — Phase 4 revision
 
-**Voxel density — characters need far more detail, not just primitive blocks.**
-Current characters are ~5 flat boxes and read as crude, not voxel-rich. Rebuild each character from many smaller voxel cubes: separate small cubes for eyes (white base + black pupil), a distinct color band at the collar/waist to break up the torso into two tones, small accent cubes for hair/hat detail, and clearly separated shoe-sole blocks in a contrasting dark color. Look at the reference characters' actual voxel count — they're assembled from dozens of small cubes, not a handful of large primitives.
+**Lighting — establish one clear directional sun, not even ambient brightness.**
+Set up a single strong directional light from a consistent classic angle (upper-left or upper-right, roughly 45°), warm-white in color, as the dominant light source. Ambient/fill light should be kept low relative to it, so there's real contrast: sunlit faces look bright, warm, and vivid, shadow faces are a clearly darker tint of the same hue (not near-black, not just a different ambient shade). Every object in the scene should show light and shadow faces consistent with this one light direction. The goal is that the scene reads as "direct sunlight hitting a bright day," which is currently missing — right now brightness varies across surfaces without a coherent source direction.
 
-**Water — make it flat and stylized, not a realistic gradient.**
-Replace the current smooth navy gradient water with a flat, bright cyan/turquoise color (no gradient, no realistic depth shading). Add hard-edged white foam/wave shapes as flat geometric patterns on the surface, matching the crisp turquoise water blocks in the reference images — not a smooth realistic ocean look.
+**Camera / framing — fill the entire viewport, don't float the scene in empty space.**
+The current look-dev camera shows the play area as a small tile floating in a large empty sky void. Adjust the camera distance/angle/FOV so the ground and water extend to all edges of the screen with no visible empty void — the world should feel like it continues past the frame in every direction, matching the tightly-cropped, diagonal isometric framing in the reference image. This is the actual in-game camera behavior to build toward, not just a look-dev tweak.
 
-**Shadows — hard-edged, not soft/blurred.**
-Turn off soft shadow blur entirely (disable PCF softening / shadow radius) so shadows read as crisp, hard-edged flat shapes under each character and object, matching the reference's sharp shadow blobs. If true shadow maps keep coming out soft, fake it instead with a simple flat dark decal shape under each character's feet.
+**Boat — needs a real hull shape, not a flat colored block.**
+Rebuild the boat as a proper small voxel hull: tapered/pointed bow, flat stern, slightly raised side walls, built from small blocks rather than one flat rectangular slab. Warm wood-brown base with a trim-color accent stripe, similar spirit to the reference's vehicle/prop construction (many small blocks reading as one recognizable shape).
 
-**Shading contrast — shadow-side faces are currently too dark.**
-Right now the darker cube faces are going close to black, losing all color information. Shadow-side faces should read as a darker tint of the same hue (e.g., darker green, not near-black), not a different near-black color. Raise ambient/fill light so no face drops much below roughly half the brightness of the lit face.
-
-**Overall brightness — scene needs to be brighter and punchier.**
-Increase global light intensity / exposure and boost saturation across the whole palette (grass, water, couple colors). The reference images read as bright and cheerful at a glance; the current pass reads muted and dim by comparison.
-
-**Add environment props for charm.**
-Scatter simple blocky trees (stacked cube trunk + cube foliage, like the reference tree), small bushes, and flowers around the play area at a scale clearly smaller than the characters — this is currently missing and the reference relies on these small touches for its charm.
-
-**Palette — use a small, deliberately curated set of fully-saturated colors, not defaults.**
-Define an explicit limited palette up front (roughly 6-8 named colors total) rather than letting materials default to whatever mid-tone values come out of the color picker: two bright grass-green shades for the checkerboard tiles, one saturated cyan-turquoise for water, one warm mid-brown for wood/boat, and fully-saturated (not pastel, not muddy) red/green/blue for the couples. Every color in the scene should be either one of these or a close variant — avoid any grayish, muddy, or desaturated tones creeping in anywhere except thin dirt/soil trim strips. This consistency (not just individual color brightness) is what makes the reference read as polished rather than default-generated.
+**Trees — add more, and cluster them like the reference.**
+Scatter several more trees around the edges of the play area (not just one or two), with the same stacked-cube-trunk-and-foliage construction already established, varying size slightly for visual interest. Reference the tree density and placement pattern in the attached Crossy Road image.
 
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
