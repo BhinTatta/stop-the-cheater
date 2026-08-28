@@ -97,6 +97,16 @@ Scatter several more trees around the edges of the play area (not just one or tw
 
 **Fixed home slots.** Each character now has a permanent home index (0-5, mirrored per bank) instead of claiming whichever bank slot happens to be free. A character always returns to the same numbered spot on whichever bank they're standing on, so couples don't visually "shuffle" across multiple crossings.
 
+## Camera & lighting — locked (Phase 7)
+
+The user confirmed the camera angle via a screenshot of the app itself, so this is now the reference framing to build the real game camera against — not a look-dev placeholder.
+
+**Camera.** Fixed orthographic, looking mostly along the world's X axis (the crossing direction) from the near/right bank's side — not the 45°-corner isometric view earlier passes used. Zoomed tight enough that the ground fills the frame edge-to-edge on a portrait phone with no sky boundary visible at top or bottom; the bank grid itself extends ~11-12 world units past the visible play area in every direction as a buffer so tightening the crop further never reveals an edge.
+
+**Lighting bug (fixed).** The key light had been positioned on the opposite side from the camera — a leftover from an earlier camera-angle revision that was never re-checked after the camera's azimuth changed. Since characters are rotated to face the camera, this meant their backs were lit and their visible (camera-facing) side sat in shadow. The key light now sits on the same side as the camera; fill stays on the opposite side.
+
+**Couple layout — triangle, not a line.** The three couples stand at the corners of a triangle rather than in a single row: one couple near the water (closest to the boat), the other two spread wide at the back corners. Far-bank tree placement was thinned near where the back-corner couples land after crossing, so there's real room once they arrive.
+
 ## Explicitly out of scope for v1
 - Accounts, auth, social login
 - In-game monetization/ads
