@@ -160,3 +160,138 @@ body {
 .end-panel button:active {
   transform: translateY(1px);
 }
+
+/* ---------- play count badge ---------- */
+
+#play-count-badge {
+  position: fixed;
+  top: max(14px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text-muted);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+/* ---------- challenge banner ---------- */
+
+#challenge-banner {
+  position: fixed;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 32px;
+  background: rgba(8, 16, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+#challenge-banner.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#challenge-text {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: clamp(22px, 6vw, 32px);
+  color: var(--text);
+  max-width: 380px;
+  text-wrap: balance;
+}
+
+#challenge-banner button {
+  padding: 14px 36px;
+  border: none;
+  border-radius: 999px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, #ffd466, var(--accent));
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+  cursor: pointer;
+}
+
+/* ---------- win screen result / sharing ---------- */
+
+.win-stats {
+  display: flex;
+  gap: 14px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text);
+}
+
+.win-stats span {
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--panel-border);
+}
+
+#win-name-input {
+  width: min(280px, 80vw);
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-family: "Nunito", sans-serif;
+  font-size: 15px;
+  text-align: center;
+}
+
+#win-name-input::placeholder {
+  color: var(--text-muted);
+}
+
+#win-sentence {
+  font-family: "Nunito", sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-muted);
+  max-width: 320px;
+}
+
+.win-share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.win-share-actions button {
+  margin-top: 0;
+  padding: 11px 22px;
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.win-share-actions button:active {
+  transform: translateY(1px);
+}

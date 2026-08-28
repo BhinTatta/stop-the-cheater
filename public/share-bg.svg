@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1080" viewBox="0 0 1080 1080">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bfe8fa" />
+      <stop offset="55%" stop-color="#6fb9d6" />
+      <stop offset="100%" stop-color="#0f2a37" />
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2f7fa6" />
+      <stop offset="100%" stop-color="#0e2027" />
+    </linearGradient>
+  </defs>
+  <rect width="1080" height="1080" fill="url(#sky)" />
+  <rect x="0" y="760" width="1080" height="320" fill="url(#water)" />
+  <circle cx="880" cy="180" r="120" fill="#ffe9a8" opacity="0.55" />
+  <g opacity="0.85">
+    <rect x="0" y="700" width="1080" height="70" fill="#3f9e57" />
+    <rect x="0" y="1010" width="1080" height="70" fill="#3f9e57" />
+  </g>
+</svg>
