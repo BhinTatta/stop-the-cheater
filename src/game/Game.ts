@@ -32,7 +32,7 @@ import { PALETTE } from "../scene/palette";
 import { playBoop, playGameOverSting, playSmooch } from "../scene/audio";
 import { createOverlay, type Overlay } from "../ui/overlay";
 import { createTuningPanel, type TuningPanel } from "../ui/tuningPanel";
-import { onTuningChange, tuning, tuningEnabled, type TuningKey } from "../scene/tuning";
+import { applyAspectPreset, onTuningChange, tuning, tuningEnabled, type TuningKey } from "../scene/tuning";
 import { fetchStats, postEvent } from "../net/api";
 import { generateShareImage } from "../share/shareImage";
 import { buildChallengeUrl, challengeBannerText, parseChallengeFromUrl, resultSentence } from "../share/challenge";
@@ -143,6 +143,7 @@ export class Game {
     this.scene.fog = new THREE.Fog(0xbfe8fa, 26, 52);
 
     const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+    applyAspectPreset(aspect);
     this.camera = createCamera(aspect);
 
     addLights(this.scene);
@@ -188,15 +189,15 @@ export class Game {
     this.updateRowButton();
     this.setupGrowthAndSharing();
 
-    if (tuningEnabled()) {
-      this.tuningPanel = createTuningPanel(container);
-      // Applying on the next frame rather than inside the listener keeps a
-      // slider drag to one scene update per rendered frame.
-      onTuningChange((key: TuningKey) => {
-        this.tuningDirty = true;
-        if (key === "bankHalfDepth") this.banksDirty = true;
-      });
-    }
+    // Applying on the next frame rather than inside the listener keeps a
+    // slider drag — or a resize re-blending the preset — to one scene
+    // update per rendered frame. Registered even without the harness,
+    // since a resize changes the tuned values on its own.
+    onTuningChange((key: TuningKey) => {
+      this.tuningDirty = true;
+      if (key === "bankHalfDepth") this.banksDirty = true;
+    });
+    if (tuningEnabled()) this.tuningPanel = createTuningPanel(container);
 
     this.canvas.addEventListener("pointerdown", (e) => {
       this.downX = e.clientX;
@@ -627,6 +628,8 @@ export class Game {
       worstX,
       worstY,
       clipped,
+      drawCalls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
     });
   }
 
@@ -637,6 +640,8 @@ export class Game {
     const w = container?.clientWidth ?? window.innerWidth;
     const h = container?.clientHeight ?? window.innerHeight;
     if (!w || !h) return;
+    applyAspectPreset(w / h);
+    syncCameraPose(this.camera);
     resizeCamera(this.camera, w / h);
     this.renderer.setSize(w, h, false);
     this.nextDiagnosticsAt = 0;

@@ -46,47 +46,91 @@ export interface Tuning {
 }
 
 /**
- * Starting points for the harness, not confirmed-by-eye values.
+ * Two measured presets, one per end of the aspect range, blended by
+ * aspect at runtime. One set of numbers cannot serve both: the landscape
+ * values put characters at 1.51x the frame half-width on a 394x852 phone,
+ * and the portrait values overflow vertically (1.15x) on a 1229x566
+ * window. Both were dialled in by eye on real screens with the harness
+ * and verified by its own clip readout.
  *
- * Phase 8's camera (offset 13.5/3.7/-3.7 = azimuth 105.3, elevation
- * 14.8) put the characters 2.1x outside the frame on a 390x844 phone,
- * which is the reported clipping. The cause is geometric: screen-
- * horizontal is (cos azimuth) along X and (sin azimuth) along Z, so
- * every degree of azimuth away from 90 drags the far bank — 10 units
- * away along X — sideways out of a portrait frame, and costs roughly
- * 0.4 of zoomBase to claw back. 92 keeps a little asymmetry for depth
- * and still fits. targetZ is 0 rather than 1.1 for the same reason:
- * off-centre panning spends the narrow axis.
- *
- * Couple spacing is wider than Phase 8's (frontX 2.6, backX 4.1,
- * backSpreadZ 1.1, gaps 0.8/0.5) — they read as one clump. Note the
- * trade this implies on a phone: backSpreadZ is almost exactly the
- * screen-horizontal axis, so spreading the couples and zooming in pull
- * against each other directly.
+ * Why the camera has to move with the aspect at all: screen-horizontal is
+ * cos(azimuth) along world X and sin(azimuth) along Z, so azimuth trades
+ * the X span (the two banks, 12 units apart) against the Z span (how far
+ * the couples stand apart). A portrait frame can only afford the Z span,
+ * hence 91.5; a landscape frame has room for the X span and gets depth
+ * out of it, hence 106.5.
  */
-export const DEFAULT_TUNING: Readonly<Tuning> = {
-  camAzimuthDeg: 92,
+export const PORTRAIT_TUNING: Readonly<Tuning> = {
+  camAzimuthDeg: 91.5,
   camElevationDeg: 26,
-  camDistance: 14.5,
+  camDistance: 22,
 
-  targetX: 0,
-  targetY: 0.15,
-  targetZ: 0,
+  targetX: -2.1,
+  targetY: -0.45,
+  targetZ: 0.25,
 
-  zoomBase: 12.8,
-  zoomAspectPow: 0.3,
+  zoomBase: 11.6,
+  zoomAspectPow: 0.85,
 
-  frontX: 3.0,
-  backX: 5.0,
-  backSpreadZ: 1.75,
-  frontPairGap: 1.0,
+  frontX: 3.3,
+  backX: 6.05,
+  backSpreadZ: 1.4,
+  frontPairGap: 0.75,
   backPairGap: 0.9,
 
-  bankHalfDepth: 4,
+  bankHalfDepth: 11,
 };
 
+export const LANDSCAPE_TUNING: Readonly<Tuning> = {
+  camAzimuthDeg: 106.5,
+  camElevationDeg: 23,
+  camDistance: 22.5,
+
+  targetX: -2.15,
+  targetY: -0.4,
+  targetZ: 0.7,
+
+  zoomBase: 10.8,
+  zoomAspectPow: 0.45,
+
+  frontX: 3.3,
+  backX: 6.05,
+  backSpreadZ: 1.4,
+  frontPairGap: 0.75,
+  backPairGap: 0.9,
+
+  bankHalfDepth: 11,
+};
+
+/** The aspect ratios the two presets were actually judged at. */
+export const PORTRAIT_ASPECT = 394 / 852;
+export const LANDSCAPE_ASPECT = 1229 / 566;
+
+/** Kept for anything that wants a single static answer; the live scene uses the blend. */
+export const DEFAULT_TUNING = PORTRAIT_TUNING;
+
+/**
+ * How far between the two presets a given aspect sits. Interpolating in
+ * log(aspect) rather than aspect puts a square window at the midpoint,
+ * which matches how the framing actually degrades either side of it.
+ */
+export function aspectBlend(aspect: number): number {
+  const span = Math.log(LANDSCAPE_ASPECT) - Math.log(PORTRAIT_ASPECT);
+  return Math.min(1, Math.max(0, (Math.log(Math.max(aspect, 0.01)) - Math.log(PORTRAIT_ASPECT)) / span));
+}
+
+export function tuningForAspect(aspect: number): Tuning {
+  const t = aspectBlend(aspect);
+  const out = {} as Tuning;
+  (Object.keys(PORTRAIT_TUNING) as TuningKey[]).forEach((key) => {
+    out[key] = PORTRAIT_TUNING[key] + (LANDSCAPE_TUNING[key] - PORTRAIT_TUNING[key]) * t;
+  });
+  out.bankHalfDepth = Math.round(out.bankHalfDepth);
+  return out;
+}
+
 /** The live values every consumer reads. Mutated in place so imports stay valid. */
-export const tuning: Tuning = { ...DEFAULT_TUNING };
+export const tuning: Tuning = { ...PORTRAIT_TUNING };
 
 export type TuningKey = keyof Tuning;
 
@@ -135,19 +179,46 @@ function clampToField(key: TuningKey, value: number): number {
   return Math.min(field.max, Math.max(field.min, value));
 }
 
-export function setTuning(key: TuningKey, value: number): void {
+function applyValue(key: TuningKey, value: number): void {
   const next = clampToField(key, value);
   if (tuning[key] === next) return;
   tuning[key] = next;
   listeners.forEach((cb) => cb(key));
 }
 
-export function resetTuning(): void {
-  (Object.keys(DEFAULT_TUNING) as TuningKey[]).forEach((key) => setTuning(key, DEFAULT_TUNING[key]));
+/**
+ * True while the aspect presets are driving the values. Any hand-set
+ * value (harness slider, or a ?t= link) pins the scene instead, so a
+ * resize mid-tuning doesn't yank the numbers out from under you.
+ */
+let autoFromAspect = true;
+let lastAspect = PORTRAIT_ASPECT;
+
+export function isAutoTuning(): boolean {
+  return autoFromAspect;
 }
 
-export function isTuningDefault(): boolean {
-  return (Object.keys(DEFAULT_TUNING) as TuningKey[]).every((key) => tuning[key] === DEFAULT_TUNING[key]);
+export function setTuning(key: TuningKey, value: number): void {
+  autoFromAspect = false;
+  applyValue(key, value);
+}
+
+/** Re-blend for a new viewport shape. No-op once anything has been set by hand. */
+export function applyAspectPreset(aspect: number): void {
+  lastAspect = aspect;
+  if (!autoFromAspect) return;
+  const next = tuningForAspect(aspect);
+  (Object.keys(next) as TuningKey[]).forEach((key) => applyValue(key, next[key]));
+}
+
+export function resetTuning(): void {
+  autoFromAspect = true;
+  const next = tuningForAspect(lastAspect);
+  (Object.keys(next) as TuningKey[]).forEach((key) => applyValue(key, next[key]));
+}
+
+export function currentAspect(): number {
+  return lastAspect;
 }
 
 // ---------- persistence ----------

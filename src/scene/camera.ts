@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { tuning } from "./tuning";
+import { PORTRAIT_ASPECT, tuning } from "./tuning";
 
 /**
  * Art-direction camera. The world is wide along X (the two banks + river
@@ -27,10 +27,20 @@ export function cameraOffset(out = new THREE.Vector3()): THREE.Vector3 {
   return out.set(horizontal * Math.sin(az), tuning.camDistance * Math.sin(el), horizontal * Math.cos(az));
 }
 
-// Tuned for a portrait phone (the primary target). A wide/landscape window
-// has ample horizontal room already, so it needs less vertical frustum to
-// still fill edge to edge.
+/**
+ * Vertical frustum height. Above the portrait reference the tuned
+ * aspect compensation applies: a wide window has horizontal room already
+ * and needs less vertical frustum to still fill edge to edge.
+ *
+ * Below it, the frustum instead grows to hold the *width* constant.
+ * The portrait preset is dialled to about 0.90 of the frame half-width,
+ * so without this a narrower window (a tall foldable, a squeezed
+ * browser) would clip the outer couples — frustum alone is vertical, and
+ * holding it fixed shrinks the horizontal with the aspect. This leaves
+ * both tuned viewports untouched and only ever zooms out.
+ */
 export function computeFrustumSize(aspect: number): number {
+  if (aspect < PORTRAIT_ASPECT) return tuning.zoomBase * (PORTRAIT_ASPECT / Math.max(aspect, 0.05));
   return tuning.zoomBase / Math.max(1, Math.pow(aspect, tuning.zoomAspectPow));
 }
 

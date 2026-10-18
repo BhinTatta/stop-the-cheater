@@ -1,7 +1,8 @@
 import {
   TUNING_FIELDS,
   clearSavedTuning,
-  isTuningDefault,
+  aspectBlend,
+  isAutoTuning,
   onTuningChange,
   resetTuning,
   saveTuning,
@@ -34,6 +35,9 @@ export interface TuningDiagnostics {
   worstY: number;
   /** Labels of anything currently outside the frame. */
   clipped: string[];
+  /** Per-frame renderer cost — bank depth multiplies this hard. */
+  drawCalls: number;
+  triangles: number;
 }
 
 export interface TuningPanel {
@@ -227,7 +231,14 @@ export function createTuningPanel(container: HTMLElement): TuningPanel {
       if (document.activeElement !== number && number.value !== text) number.value = text;
       if (range.value !== String(value)) range.value = String(value);
     });
-    fab.dataset.dirty = isTuningDefault() ? "0" : "1";
+    fab.dataset.dirty = isAutoTuning() ? "0" : "1";
+  }
+
+  /** Which end of the aspect range these numbers belong to. */
+  function presetLabel(aspect: number): string {
+    const t = aspectBlend(aspect);
+    const end = t <= 0.02 ? "portrait preset" : t >= 0.98 ? "landscape preset" : "between presets";
+    return `${end} (t ${t.toFixed(2)})${isAutoTuning() ? "" : ", hand-set"}`;
   }
 
   /** The block the harness exists to produce — paste this back verbatim. */
@@ -236,7 +247,9 @@ export function createTuningPanel(container: HTMLElement): TuningPanel {
     if (diagnostics) {
       lines.push(
         `# ${diagnostics.widthPx}x${diagnostics.heightPx}px · aspect ${diagnostics.aspect.toFixed(3)} · frustum ${diagnostics.frustum.toFixed(2)}`,
+        `# ${presetLabel(diagnostics.aspect)}`,
         `# fit x ${diagnostics.worstX.toFixed(2)} y ${diagnostics.worstY.toFixed(2)}${diagnostics.clipped.length ? ` · CLIPPED: ${diagnostics.clipped.join(", ")}` : " · ok"}`,
+        `# ${diagnostics.drawCalls} draw calls · ${diagnostics.triangles} tris`,
       );
     }
     let group = "";
@@ -258,7 +271,9 @@ export function createTuningPanel(container: HTMLElement): TuningPanel {
       : `<span class="good">everyone fits</span>`;
     readout.innerHTML =
       `<b>${widthPx}×${heightPx}</b>px · aspect <b>${aspect.toFixed(3)}</b> · frustum <b>${frustum.toFixed(2)}</b>\n` +
-      `widest point: x <b>${worstX.toFixed(2)}</b> y <b>${worstY.toFixed(2)}</b> (1.00 = frame edge)\n${verdict}`;
+      `${presetLabel(aspect)}\n` +
+      `widest point: x <b>${worstX.toFixed(2)}</b> y <b>${worstY.toFixed(2)}</b> (1.00 = frame edge)\n` +
+      `<b>${diagnostics.drawCalls}</b> draw calls · <b>${(diagnostics.triangles / 1000).toFixed(1)}k</b> tris\n${verdict}`;
     textBox.value = reportText();
   }
 
