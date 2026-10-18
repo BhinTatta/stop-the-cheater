@@ -38,6 +38,9 @@ export interface TuningDiagnostics {
   /** Per-frame renderer cost — bank depth multiplies this hard. */
   drawCalls: number;
   triangles: number;
+  /** Resident GPU objects — these staying flat across replays is the leak test. */
+  geometries: number;
+  textures: number;
 }
 
 export interface TuningPanel {
@@ -250,6 +253,7 @@ export function createTuningPanel(container: HTMLElement): TuningPanel {
         `# ${presetLabel(diagnostics.aspect)}`,
         `# fit x ${diagnostics.worstX.toFixed(2)} y ${diagnostics.worstY.toFixed(2)}${diagnostics.clipped.length ? ` · CLIPPED: ${diagnostics.clipped.join(", ")}` : " · ok"}`,
         `# ${diagnostics.drawCalls} draw calls · ${diagnostics.triangles} tris`,
+        `# resident ${diagnostics.geometries} geometries · ${diagnostics.textures} textures`,
       );
     }
     let group = "";
@@ -273,7 +277,8 @@ export function createTuningPanel(container: HTMLElement): TuningPanel {
       `<b>${widthPx}×${heightPx}</b>px · aspect <b>${aspect.toFixed(3)}</b> · frustum <b>${frustum.toFixed(2)}</b>\n` +
       `${presetLabel(aspect)}\n` +
       `widest point: x <b>${worstX.toFixed(2)}</b> y <b>${worstY.toFixed(2)}</b> (1.00 = frame edge)\n` +
-      `<b>${diagnostics.drawCalls}</b> draw calls · <b>${(diagnostics.triangles / 1000).toFixed(1)}k</b> tris\n${verdict}`;
+      `<b>${diagnostics.drawCalls}</b> draw calls · <b>${(diagnostics.triangles / 1000).toFixed(1)}k</b> tris\n` +
+      `resident: <b>${diagnostics.geometries}</b> geometries · <b>${diagnostics.textures}</b> textures\n${verdict}`;
     textBox.value = reportText();
   }
 

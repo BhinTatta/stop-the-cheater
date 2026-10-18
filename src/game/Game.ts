@@ -25,6 +25,7 @@ import {
   type WaterHandle,
 } from "../scene/environment";
 import { buildBank, LEFT_BANK_SPEC, RIGHT_BANK_SPEC } from "../scene/bank";
+import { disposeMerged } from "../scene/merge";
 import { buildBoat, BOAT_FLOOR_H, BOAT_LOCAL_SEATS, DOCK_LEFT_X, DOCK_RIGHT_X } from "../scene/boat";
 import { buildCharacter, type CharacterRig } from "../scene/character";
 import { allHomeSlots, homeSlot, CHAR_HEIGHT_Y, type WorldSide } from "../scene/layout";
@@ -61,6 +62,7 @@ interface KissSequence {
 }
 
 const STRIDE_FREQ = 10;
+const MIN_PIXEL_RATIO = 1;
 
 // Rough character bounds (rig is ~1.08 tall at BASE_SCALE 0.85, ~0.48 wide),
 // used only to measure how close they come to the edge of the frame.
@@ -123,6 +125,11 @@ export class Game {
   private banksDirty = false;
   private nextDiagnosticsAt = 0;
 
+  private basePixelRatio = 1;
+  private pixelRatio = 1;
+  private perfSamples = 0;
+  private slowFrames = 0;
+
   private downX = 0;
   private downY = 0;
   private downId = -1;
@@ -132,8 +139,18 @@ export class Game {
     this.canvas.id = "game-canvas";
     container.appendChild(this.canvas);
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // MSAA on a 2x+ screen buys very little and costs real fill rate on a
+    // mid-range phone, where the device pixel ratio is already doing the
+    // smoothing. Desktop (1x) keeps it.
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: dpr < 2,
+      powerPreference: "high-performance",
+    });
+    this.basePixelRatio = Math.min(dpr, 2);
+    this.pixelRatio = this.basePixelRatio;
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
@@ -186,6 +203,7 @@ export class Game {
     this.overlay = createOverlay(container);
     this.overlay.rowButton.addEventListener("click", () => this.onRowClicked());
     this.overlay.retryButton.addEventListener("click", () => this.retry());
+    this.overlay.resetButton.addEventListener("click", () => this.retry());
     this.updateRowButton();
     this.setupGrowthAndSharing();
 
@@ -209,6 +227,17 @@ export class Game {
       const dx = e.clientX - this.downX;
       const dy = e.clientY - this.downY;
       if (Math.abs(dx) + Math.abs(dy) < 6) this.handleTap(e);
+    });
+
+    // A backgrounded tab or a GPU reset takes the context away; three can
+    // restore itself, but only if the default "give up" is prevented and
+    // the loop is parked until the context is back.
+    this.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.renderer.setAnimationLoop(null);
+    });
+    this.canvas.addEventListener("webglcontextrestored", () => {
+      this.renderer.setAnimationLoop(() => this.animate());
     });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -417,14 +446,21 @@ export class Game {
     });
   }
 
+  /**
+   * One sprite, reused. Building a fresh canvas texture and material per
+   * violation leaked both every time — the old sprite left the scene but
+   * its GPU texture never did, so a long session climbed steadily.
+   */
   private spawnHeart(position: THREE.Vector3): void {
-    if (this.heartSprite) this.scene.remove(this.heartSprite);
-    const tex = makeHeartTexture();
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    if (!this.heartSprite) {
+      const material = new THREE.SpriteMaterial({ map: getHeartTexture(), transparent: true, depthWrite: false });
+      this.heartSprite = new THREE.Sprite(material);
+    }
+    const sprite = this.heartSprite;
+    (sprite.material as THREE.SpriteMaterial).opacity = 1;
     sprite.scale.set(0.001, 0.001, 1);
     sprite.position.set(position.x, position.y + 1.15, position.z);
-    this.scene.add(sprite);
-    this.heartSprite = sprite;
+    if (!sprite.parent) this.scene.add(sprite);
   }
 
   // ---------- retry ----------
@@ -435,10 +471,7 @@ export class Game {
     this.boatMoving = false;
     this.pendingOutcome = null;
     this.kissSeq = null;
-    if (this.heartSprite) {
-      this.scene.remove(this.heartSprite);
-      this.heartSprite = null;
-    }
+    if (this.heartSprite) this.scene.remove(this.heartSprite);
     this.placeAllAtHome();
     this.dockBoat();
     this.gamePhase = "boarding";
@@ -446,11 +479,14 @@ export class Game {
     this.overlay.hideWin();
     this.updateRowButton();
 
+    // Only a puzzle that was actually under way counts as a fresh attempt
+    // — resetting an untouched board would double-count the load.
+    const wasUnderWay = this.startTimeMs !== null;
     this.moveCount = 0;
     this.startTimeMs = null;
     this.lastWinResult = null;
     this.shareBlob = null;
-    postEvent("attempt");
+    if (wasUnderWay) postEvent("attempt");
   }
 
   private ensureTimerStarted(): void {
@@ -563,11 +599,7 @@ export class Game {
   private rebuildBanks(): void {
     this.banks.forEach((bank) => {
       this.scene.remove(bank);
-      // Materials are shared module-level singletons — only the per-tile
-      // geometry is ours to release.
-      bank.traverse((obj) => {
-        if ((obj as THREE.Mesh).isMesh) (obj as THREE.Mesh).geometry.dispose();
-      });
+      disposeMerged(bank);
     });
     this.banks = [buildBank(LEFT_BANK_SPEC), buildBank(RIGHT_BANK_SPEC)];
     this.banks.forEach((bank) => this.scene.add(bank));
@@ -630,6 +662,8 @@ export class Game {
       clipped,
       drawCalls: this.renderer.info.render.calls,
       triangles: this.renderer.info.render.triangles,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
     });
   }
 
@@ -650,8 +684,11 @@ export class Game {
   // ---------- animate ----------
 
   private animate(): void {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const rawDelta = this.clock.getDelta();
+    const dt = Math.min(rawDelta, 0.05);
     const t = this.clock.elapsedTime;
+
+    this.trackFrameRate(rawDelta);
 
     if (this.tuningDirty) {
       this.tuningDirty = false;
@@ -682,6 +719,28 @@ export class Game {
     updateClouds(this.clouds, dt);
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Back off render resolution on a device that cannot hold frame rate.
+   * One-way: a phone that drops to 1x stays there, because stepping back
+   * up on a brief recovery just oscillates. Frames longer than 100ms are
+   * stalls (tab switch, GC pause), not a frame-rate signal.
+   */
+  private trackFrameRate(rawDelta: number): void {
+    if (this.pixelRatio <= MIN_PIXEL_RATIO) return;
+    if (rawDelta <= 0 || rawDelta > 0.1) return;
+    this.perfSamples++;
+    if (rawDelta > 1 / 45) this.slowFrames++;
+    if (this.perfSamples < 120) return;
+
+    if (this.slowFrames > 60) {
+      this.pixelRatio = Math.max(MIN_PIXEL_RATIO, this.pixelRatio - 0.25);
+      this.renderer.setPixelRatio(this.pixelRatio);
+      this.resize();
+    }
+    this.perfSamples = 0;
+    this.slowFrames = 0;
   }
 
   private updateCharacter(entry: CharacterEntry, t: number, _dt: number): void {
@@ -791,8 +850,26 @@ export class Game {
     this.tuningPanel?.destroy();
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh && !(obj as THREE.Sprite).isSprite) return;
+      mesh.geometry?.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((m) => {
+        (m as THREE.MeshStandardMaterial)?.map?.dispose();
+        m?.dispose();
+      });
+    });
+    this.scene.clear();
     this.renderer.dispose();
   }
+}
+
+let heartTexture: THREE.CanvasTexture | null = null;
+
+function getHeartTexture(): THREE.CanvasTexture {
+  heartTexture = heartTexture ?? makeHeartTexture();
+  return heartTexture;
 }
 
 function makeHeartTexture(): THREE.CanvasTexture {

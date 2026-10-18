@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { PALETTE, darken, hash, mat, place } from "./palette";
 import { buildBush, buildFlower, buildPebble, buildReed, buildTree, buildTuft } from "./props";
 import { tuning } from "./tuning";
+import { mergeStatic } from "./merge";
 
 const GRASS_LIGHT = mat(PALETTE.grassLight);
 const GRASS_DARK = mat(PALETTE.grassDark);
@@ -31,7 +32,16 @@ export interface BankSpec {
   bushSpots?: [number, number][];
 }
 
+/**
+ * A bank is authored as one mesh per tile, band and prop, then merged
+ * down to a handful of draw calls before it reaches the scene — see
+ * merge.ts. Nothing on a bank moves, so there is nothing to lose by it.
+ */
 export function buildBank(spec: BankSpec): THREE.Group {
+  return mergeStatic(buildBankMeshes(spec), "bank").group;
+}
+
+function buildBankMeshes(spec: BankSpec): THREE.Group {
   const group = new THREE.Group();
   const rows = rowsZ();
   spec.xs.forEach((x) => {

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { PALETTE, lighten } from "./palette";
 import { buildFoamChevron } from "./props";
+import { mergeStatic } from "./merge";
 
 export function makeSkyTexture(): THREE.CanvasTexture {
   const c = document.createElement("canvas");
@@ -88,12 +89,17 @@ export function buildWater(): WaterHandle {
   return { mesh, uniforms };
 }
 
-export function scatterFoam(scene: THREE.Scene, count = 20): void {
+/** Static surface detail, so it merges into a single draw call like the banks do. */
+export function scatterFoam(scene: THREE.Scene, count = 20): THREE.Group {
+  const group = new THREE.Group();
   for (let i = 0; i < count; i++) {
     const chevron = buildFoamChevron();
     chevron.position.set(-1.7 + Math.random() * 3.4, 0.035, -WATER_LEN / 2 + Math.random() * WATER_LEN);
-    scene.add(chevron);
+    group.add(chevron);
   }
+  const merged = mergeStatic(group, "foam").group;
+  scene.add(merged);
+  return merged;
 }
 
 interface CloudHandle {
