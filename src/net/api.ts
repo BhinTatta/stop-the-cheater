@@ -18,6 +18,9 @@ export async function postEvent(type: GameEventType, timeSeconds?: number): Prom
 }
 
 export interface GameStats {
+  /** False when the deploy has no stats store configured — the numbers are
+   * then placeholders and shouldn't be shown. */
+  enabled: boolean;
   plays: number;
   completions: number;
   bestTime: number | null;
@@ -27,7 +30,14 @@ export async function fetchStats(): Promise<GameStats | null> {
   try {
     const res = await fetch("/api/stats");
     if (!res.ok) return null;
-    return (await res.json()) as GameStats;
+    const stats = (await res.json()) as Partial<GameStats>;
+    if (!stats.enabled) return null;
+    return {
+      enabled: true,
+      plays: stats.plays ?? 0,
+      completions: stats.completions ?? 0,
+      bestTime: stats.bestTime ?? null,
+    };
   } catch {
     return null;
   }

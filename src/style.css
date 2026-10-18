@@ -295,3 +295,32 @@ body {
 .win-share-actions button:active {
   transform: translateY(1px);
 }
+
+/* Share is the primary action — the native sheet behind it is what reaches
+   Instagram stories and DMs, so it reads louder than save/copy. */
+.win-share-actions button.win-share-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 24px;
+  border: none;
+  color: var(--accent-ink);
+  background: linear-gradient(180deg, #ffd466, var(--accent));
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.win-share-primary svg {
+  width: 17px;
+  height: 17px;
+  flex: none;
+}
+
+#win-share-hint {
+  max-width: 300px;
+  font-family: "Nunito", sans-serif;
+  font-weight: 600;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+  text-wrap: balance;
+}

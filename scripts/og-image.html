@@ -1,0 +1,351 @@
+<!doctype html>
+<!--
+  Source for public/og-image.png — the 1200x630 link-preview card.
+
+  To regenerate after editing: open this file in a browser at a 1200x630
+  viewport and screenshot it, or render it headless, e.g.
+
+    chromium --headless --disable-gpu --hide-scrollbars \
+      --window-size=1200,630 --screenshot=public/og-image.png \
+      scripts/og-image.html
+
+  Colors below are copied from src/scene/palette.ts and src/style.css so the
+  preview matches the game it links to.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&family=Nunito:wght@600;700;800&display=swap"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+      }
+
+      .card {
+        position: relative;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: linear-gradient(180deg, #bfe8fa 0%, #8ed9f5 46%, #74c3e2 100%);
+        font-family: "Nunito", sans-serif;
+      }
+
+      .sun {
+        position: absolute;
+        top: -70px;
+        right: 96px;
+        width: 260px;
+        height: 260px;
+        border-radius: 50%;
+        background: #ffe9a8;
+        opacity: 0.6;
+      }
+
+      .cloud {
+        position: absolute;
+        height: 34px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .cloud.a { top: 40px; left: 470px; width: 150px; }
+      .cloud.b { top: 112px; left: 650px; width: 96px; height: 26px; }
+      .cloud.c { top: 58px; right: 360px; width: 118px; height: 28px; }
+
+      /* ---------- banks and water ---------- */
+
+      .bank {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 54px;
+        background: linear-gradient(180deg, #7ee84b 0%, #4fc72a 100%);
+      }
+
+      .bank::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 -16px 0;
+        height: 16px;
+        background: #8b5a2e;
+      }
+
+      .bank.far { bottom: 126px; height: 48px; }
+      .bank.near { bottom: 0; height: 30px; }
+
+      .river {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 30px;
+        height: 96px;
+        background: linear-gradient(180deg, #2fe0ea 0%, #2f7fa6 60%, #14596f 100%);
+      }
+
+      .ripple {
+        position: absolute;
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.34);
+      }
+
+      .ripple.r1 { bottom: 98px; left: 92px; width: 96px; }
+      .ripple.r2 { bottom: 62px; left: 236px; width: 62px; }
+      .ripple.r3 { bottom: 88px; right: 150px; width: 110px; }
+      .ripple.r4 { bottom: 52px; right: 328px; width: 70px; }
+
+      /* ---------- boat ---------- */
+
+      .boat {
+        position: absolute;
+        bottom: 52px;
+        left: 150px;
+        width: 210px;
+      }
+
+      .hull {
+        height: 46px;
+        background: #b5651d;
+        border-bottom: 10px solid #79491f;
+        border-radius: 8px 8px 30px 30px;
+      }
+
+      .hull-trim {
+        position: absolute;
+        top: 8px;
+        left: 14px;
+        right: 14px;
+        height: 9px;
+        background: #ffcc29;
+        border-radius: 3px;
+      }
+
+      .oar {
+        position: absolute;
+        top: -4px;
+        right: -56px;
+        width: 86px;
+        height: 9px;
+        background: #b5651d;
+        border-radius: 3px;
+        transform: rotate(24deg);
+      }
+
+      /* ---------- voxel couples ---------- */
+
+      .couples {
+        position: absolute;
+        bottom: 166px;
+        right: 64px;
+        display: flex;
+        align-items: flex-end;
+        gap: 44px;
+      }
+
+      .couple {
+        display: flex;
+        align-items: flex-end;
+        gap: 12px;
+      }
+
+      .person {
+        width: 42px;
+        position: relative;
+        filter: drop-shadow(0 6px 0 rgba(8, 18, 16, 0.22));
+      }
+
+      .head {
+        width: 32px;
+        height: 30px;
+        margin: 0 auto;
+        background: #ffcb8e;
+        border-radius: 7px;
+        position: relative;
+      }
+
+      .hair {
+        position: absolute;
+        top: -7px;
+        left: -3px;
+        right: -3px;
+        height: 13px;
+        border-radius: 7px 7px 3px 3px;
+        background: #3a2410;
+      }
+
+      .person.woman .hair {
+        height: 26px;
+        border-radius: 7px 7px 10px 10px;
+      }
+
+      .body {
+        width: 42px;
+        height: 48px;
+        border-radius: 7px;
+        margin-top: 3px;
+      }
+
+      .person.woman .body {
+        clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+      }
+
+      .legs {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+        margin-top: 2px;
+      }
+
+      .legs span {
+        width: 14px;
+        height: 16px;
+        border-radius: 0 0 4px 4px;
+        background: #1a1310;
+      }
+
+      .heart {
+        align-self: center;
+        margin-bottom: 54px;
+        font-size: 30px;
+        line-height: 1;
+        color: #ff4d8d;
+        filter: drop-shadow(0 3px 0 rgba(8, 18, 16, 0.18));
+      }
+
+      /* ---------- copy ---------- */
+
+      .copy {
+        position: absolute;
+        top: 96px;
+        left: 76px;
+        width: 580px;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 7px 18px;
+        border-radius: 999px;
+        background: rgba(14, 32, 39, 0.82);
+        color: #ffc145;
+        font-weight: 800;
+        font-size: 19px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin-top: 20px;
+        font-family: "Baloo 2", sans-serif;
+        font-weight: 800;
+        font-size: 88px;
+        line-height: 0.96;
+        letter-spacing: -0.01em;
+        color: #f4fbff;
+        text-shadow: 0 6px 0 rgba(10, 30, 40, 0.45);
+      }
+
+      p.tagline {
+        margin-top: 20px;
+        max-width: 530px;
+        font-weight: 700;
+        font-size: 25px;
+        line-height: 1.36;
+        color: #0e2027;
+      }
+
+      p.tagline b {
+        font-weight: 800;
+        color: #0e2027;
+        background: rgba(255, 193, 69, 0.85);
+        padding: 0 6px;
+        border-radius: 5px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+    <div class="sun"></div>
+    <div class="cloud a"></div>
+    <div class="cloud b"></div>
+    <div class="cloud c"></div>
+
+    <div class="couples">
+      <div class="couple">
+        <div class="person man">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #ff3b30"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+        <div class="heart">&#9829;</div>
+        <div class="person woman">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #ff3b30"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+      </div>
+      <div class="couple">
+        <div class="person man">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #1fcb6b"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+        <div class="heart">&#9829;</div>
+        <div class="person woman">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #1fcb6b"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+      </div>
+      <div class="couple">
+        <div class="person man">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #2d8cff"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+        <div class="heart">&#9829;</div>
+        <div class="person woman">
+          <div class="head"><div class="hair"></div></div>
+          <div class="body" style="background: #2d8cff"></div>
+          <div class="legs"><span></span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bank far"></div>
+    <div class="river">
+      <div class="ripple r1"></div>
+      <div class="ripple r2"></div>
+      <div class="ripple r3"></div>
+      <div class="ripple r4"></div>
+    </div>
+    <div class="boat">
+      <div class="hull"><div class="hull-trim"></div></div>
+      <div class="oar"></div>
+    </div>
+    <div class="bank near"></div>
+
+    <div class="copy">
+      <span class="eyebrow">Three couples &middot; One boat</span>
+      <h1>STOP THE<br />CHEATER</h1>
+      <p class="tagline">
+        Row everyone across the river. Leave someone's partner alone with another man and
+        <b>they kiss</b> &mdash; and you lose.
+      </p>
+    </div>
+    </div>
+  </body>
+</html>

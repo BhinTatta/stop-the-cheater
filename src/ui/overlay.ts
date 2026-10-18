@@ -13,10 +13,10 @@ export interface Overlay {
   hideWin(): void;
   getName(): string;
   onNameChange(cb: (name: string) => void): void;
-  setShareAvailable(fileShareSupported: boolean): void;
   onShareClick(cb: () => void): void;
   onDownloadClick(cb: () => void): void;
   onCopyLinkClick(cb: () => void): void;
+  flashShareLabel(text: string): void;
   flashCopied(): void;
   setPlayCount(n: number): void;
   showChallengeBanner(text: string, onDismiss: () => void): void;
@@ -26,6 +26,14 @@ function paddleIconSvg(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
     <path d="M5 19 L13 11"></path>
     <path d="M11 7 L17 13 L13 17 L7 11 Z"></path>
+  </svg>`;
+}
+
+function shareIconSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 16V4"></path>
+    <path d="M8 8l4-4 4 4"></path>
+    <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"></path>
   </svg>`;
 }
 
@@ -80,10 +88,11 @@ export function createOverlay(container: HTMLElement): Overlay {
     <input id="win-name-input" type="text" maxlength="20" placeholder="Enter your name (optional)" autocomplete="off" />
     <p id="win-sentence"></p>
     <div class="win-share-actions">
-      <button id="win-share-btn" type="button">Share</button>
-      <button id="win-download-btn" type="button">Download image</button>
+      <button id="win-share-btn" class="win-share-primary" type="button">${shareIconSvg()}<span>Share</span></button>
+      <button id="win-download-btn" type="button">Save image</button>
       <button id="win-copy-btn" type="button">Copy link</button>
     </div>
+    <p id="win-share-hint">Share the card straight to your Instagram story, or send the link to a friend.</p>
   `;
   const winRetryButton = document.createElement("button");
   winRetryButton.type = "button";
@@ -98,6 +107,7 @@ export function createOverlay(container: HTMLElement): Overlay {
   const nameInput = winPanel.querySelector<HTMLInputElement>("#win-name-input")!;
   const sentenceEl = winPanel.querySelector<HTMLParagraphElement>("#win-sentence")!;
   const shareBtn = winPanel.querySelector<HTMLButtonElement>("#win-share-btn")!;
+  const shareLabel = shareBtn.querySelector<HTMLSpanElement>("span")!;
   const downloadBtn = winPanel.querySelector<HTMLButtonElement>("#win-download-btn")!;
   const copyBtn = winPanel.querySelector<HTMLButtonElement>("#win-copy-btn")!;
 
@@ -168,11 +178,6 @@ export function createOverlay(container: HTMLElement): Overlay {
     onNameChange(cb) {
       nameChangeCb = cb;
     },
-    setShareAvailable(fileShareSupported: boolean) {
-      shareBtn.hidden = !fileShareSupported;
-      downloadBtn.hidden = fileShareSupported;
-      copyBtn.hidden = fileShareSupported;
-    },
     onShareClick(cb) {
       shareCb = cb;
     },
@@ -181,6 +186,12 @@ export function createOverlay(container: HTMLElement): Overlay {
     },
     onCopyLinkClick(cb) {
       copyCb = cb;
+    },
+    flashShareLabel(text: string) {
+      shareLabel.textContent = text;
+      window.setTimeout(() => {
+        shareLabel.textContent = "Share";
+      }, 1600);
     },
     flashCopied() {
       const original = copyBtn.textContent;

@@ -28,7 +28,7 @@ import { buildBoat, BOAT_FLOOR_H, BOAT_LOCAL_SEATS, DOCK_LEFT_X, DOCK_RIGHT_X } 
 import { buildCharacter, type CharacterRig } from "../scene/character";
 import { homeSlot, CHAR_HEIGHT_Y, type WorldSide } from "../scene/layout";
 import { PALETTE } from "../scene/palette";
-import { playBoop, playGameOverSting, playSmooch } from "../scene/audio";
+import { playBoop, playGameOverSting, playKiss, stopKiss, unlockAudio } from "../scene/audio";
 import { createOverlay, type Overlay } from "../ui/overlay";
 import { fetchStats, postEvent } from "../net/api";
 import { generateShareImage } from "../share/shareImage";
@@ -175,6 +175,7 @@ export class Game {
     this.setupGrowthAndSharing();
 
     this.canvas.addEventListener("pointerdown", (e) => {
+      unlockAudio();
       this.downX = e.clientX;
       this.downY = e.clientY;
       this.downId = e.pointerId;
@@ -405,6 +406,7 @@ export class Game {
   // ---------- retry ----------
 
   private retry(): void {
+    stopKiss();
     this.engineState = createInitialState();
     this.boatSeatOccupant = [null, null];
     this.boatMoving = false;
@@ -437,13 +439,11 @@ export class Game {
   private setupGrowthAndSharing(): void {
     postEvent("attempt");
 
+    // Null when no stats store is configured (fetchStats filters that out),
+    // in which case the badge simply never appears.
     fetchStats().then((stats) => {
       if (stats) this.overlay.setPlayCount(2000 + stats.plays);
     });
-
-    const dummyFile = new File([""], "share.png", { type: "image/png" });
-    const canFileShare = !!(navigator.canShare && navigator.canShare({ files: [dummyFile] }));
-    this.overlay.setShareAvailable(canFileShare);
 
     this.overlay.onNameChange((name) => this.pregenerateShareImage(name));
     this.overlay.onShareClick(() => this.handleShareClick());
@@ -465,6 +465,13 @@ export class Game {
     this.shareBlob = blob;
   }
 
+  /**
+   * One button for every platform. On phones the native sheet carries the
+   * card image itself, which is what Instagram Stories (and WhatsApp, iMessage
+   * and friends) pick up; on a desktop browser with no share sheet it falls
+   * back to copying the challenge link and saving the card so it can be
+   * dropped into a story by hand.
+   */
   private async handleShareClick(): Promise<void> {
     if (!this.lastWinResult) return;
     const name = this.overlay.getName();
@@ -474,12 +481,30 @@ export class Game {
 
     try {
       if (files.length && navigator.canShare?.({ files })) {
-        await navigator.share({ files, text, url });
-      } else if (navigator.share) {
-        await navigator.share({ text, url });
+        await navigator.share({ files, text, url, title: "Stop the Cheater" });
+        return;
       }
+      if (navigator.share) {
+        await navigator.share({ text, url, title: "Stop the Cheater" });
+        return;
+      }
+    } catch (err) {
+      // AbortError is the user closing the sheet — anything else means the
+      // sheet failed, so fall through to the copy/save path below.
+      if (err instanceof DOMException && err.name === "AbortError") return;
+    }
+
+    const copied = await this.copyToClipboard(url);
+    this.handleDownloadClick();
+    this.overlay.flashShareLabel(copied ? "Link copied!" : "Image saved!");
+  }
+
+  private async copyToClipboard(text: string): Promise<boolean> {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
     } catch {
-      // user cancelled the share sheet — nothing to do
+      return false;
     }
   }
 
@@ -489,19 +514,18 @@ export class Game {
     const a = document.createElement("a");
     a.href = url;
     a.download = "stop-the-cheater-result.png";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    // Firefox cancels an in-flight download if the blob URL is revoked
+    // synchronously after the click.
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
   }
 
   private async handleCopyLinkClick(): Promise<void> {
     if (!this.lastWinResult) return;
     const url = buildChallengeUrl({ name: this.overlay.getName(), moves: this.lastWinResult.moves, timeSeconds: this.lastWinResult.timeSeconds });
-    try {
-      await navigator.clipboard.writeText(url);
-      this.overlay.flashCopied();
-    } catch {
-      // clipboard permission denied — no fallback needed for this vanity feature
-    }
+    if (await this.copyToClipboard(url)) this.overlay.flashCopied();
   }
 
   private updateRowButton(): void {
@@ -625,7 +649,7 @@ export class Game {
         seq.holdStart = t;
         const womanEntry = this.chars.get(seq.woman)!;
         womanEntry.state = "kissPose";
-        playSmooch();
+        playKiss();
         this.spawnHeart(womanEntry.rig.root.position);
       }
       return;
