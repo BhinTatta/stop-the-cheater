@@ -94,6 +94,54 @@ body {
   }
 }
 
+/* Quick reset — always reachable while the puzzle is live. Top-right so
+   it clears the Row button, the play-count badge and the tuning harness
+   fab, and sits under the thumb in portrait. */
+#reset-btn {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px 9px 12px;
+  border-radius: 999px;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.26);
+  opacity: 0.82;
+  transition:
+    opacity 0.2s ease,
+    transform 0.12s ease;
+}
+
+#reset-btn svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+#reset-btn:hover {
+  opacity: 1;
+}
+
+#reset-btn:active {
+  transform: scale(0.94);
+  opacity: 1;
+}
+
+#reset-btn[hidden] {
+  display: none;
+}
+
 /* ---------- end-of-run panels ---------- */
 
 .end-panel {

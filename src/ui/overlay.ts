@@ -6,6 +6,7 @@ export interface WinResult {
 export interface Overlay {
   rowButton: HTMLButtonElement;
   retryButton: HTMLButtonElement;
+  resetButton: HTMLButtonElement;
   setRowEnabled(enabled: boolean): void;
   showGameOver(): void;
   hideGameOver(): void;
@@ -20,6 +21,13 @@ export interface Overlay {
   flashCopied(): void;
   setPlayCount(n: number): void;
   showChallengeBanner(text: string, onDismiss: () => void): void;
+}
+
+function resetIconSvg(): string {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 12a9 9 0 1 0 2.6-6.4"></path>
+    <path d="M3 4v5h5"></path>
+  </svg>`;
 }
 
 function paddleIconSvg(): string {
@@ -44,6 +52,15 @@ export function createOverlay(container: HTMLElement): Overlay {
   rowButton.setAttribute("aria-label", "Row the boat across");
   rowButton.innerHTML = `${paddleIconSvg()}<span>Row</span>`;
   container.appendChild(rowButton);
+
+  // Always reachable mid-puzzle: the player who has spotted their mistake
+  // three moves in shouldn't have to play out a loss to start over.
+  const resetButton = document.createElement("button");
+  resetButton.id = "reset-btn";
+  resetButton.type = "button";
+  resetButton.setAttribute("aria-label", "Start the puzzle over");
+  resetButton.innerHTML = `${resetIconSvg()}<span>Reset</span>`;
+  container.appendChild(resetButton);
 
   const playCountBadge = document.createElement("div");
   playCountBadge.id = "play-count-badge";
@@ -150,15 +167,18 @@ export function createOverlay(container: HTMLElement): Overlay {
   return {
     rowButton,
     retryButton,
+    resetButton,
     setRowEnabled(enabled: boolean) {
       rowButton.classList.toggle("enabled", enabled);
       rowButton.disabled = !enabled;
     },
     showGameOver() {
       gameOverPanel.classList.add("visible");
+      resetButton.hidden = true;
     },
     hideGameOver() {
       gameOverPanel.classList.remove("visible");
+      resetButton.hidden = false;
     },
     showWin(result: WinResult) {
       currentResult = result;
@@ -167,9 +187,11 @@ export function createOverlay(container: HTMLElement): Overlay {
       winTimeEl.textContent = `${result.timeSeconds.toFixed(2)} seconds`;
       refreshSentence();
       winPanel.classList.add("visible");
+      resetButton.hidden = true;
     },
     hideWin() {
       winPanel.classList.remove("visible");
+      resetButton.hidden = false;
       currentResult = null;
     },
     getName() {

@@ -12,7 +12,7 @@ import {
   type PersonId,
   type RowOutcome,
 } from "../engine";
-import { createCamera, resizeCamera, IDLE_FACING_Y } from "../scene/camera";
+import { computeFrustumSize, createCamera, idleFacingY, resizeCamera, syncCameraPose } from "../scene/camera";
 import {
   addLights,
   addSunGlow,
@@ -21,15 +21,19 @@ import {
   scatterClouds,
   scatterFoam,
   updateClouds,
+  WATER_LEN,
   type WaterHandle,
 } from "../scene/environment";
 import { buildBank, LEFT_BANK_SPEC, RIGHT_BANK_SPEC } from "../scene/bank";
+import { disposeMerged } from "../scene/merge";
 import { buildBoat, BOAT_FLOOR_H, BOAT_LOCAL_SEATS, DOCK_LEFT_X, DOCK_RIGHT_X } from "../scene/boat";
 import { buildCharacter, type CharacterRig } from "../scene/character";
-import { homeSlot, CHAR_HEIGHT_Y, type WorldSide } from "../scene/layout";
+import { allHomeSlots, homeSlot, CHAR_HEIGHT_Y, type WorldSide } from "../scene/layout";
 import { PALETTE } from "../scene/palette";
 import { playBoop, playGameOverSting, playKiss, stopKiss, unlockAudio } from "../scene/audio";
 import { createOverlay, type Overlay } from "../ui/overlay";
+import { createTuningPanel, type TuningPanel } from "../ui/tuningPanel";
+import { applyAspectPreset, onTuningChange, tuning, tuningEnabled, type TuningKey } from "../scene/tuning";
 import { fetchStats, postEvent } from "../net/api";
 import { generateShareImage } from "../share/shareImage";
 import { buildChallengeUrl, challengeBannerText, parseChallengeFromUrl, resultSentence } from "../share/challenge";
@@ -58,6 +62,12 @@ interface KissSequence {
 }
 
 const STRIDE_FREQ = 10;
+const MIN_PIXEL_RATIO = 1;
+
+// Rough character bounds (rig is ~1.08 tall at BASE_SCALE 0.85, ~0.48 wide),
+// used only to measure how close they come to the edge of the frame.
+const CHAR_TOP_Y = 0.95;
+const CHAR_HALF_W = 0.22;
 
 /**
  * The engine's abstract "left"/"right" banks are not the same axis as our
@@ -109,6 +119,16 @@ export class Game {
   private water: WaterHandle;
   private clouds: ReturnType<typeof scatterClouds>;
   private overlay: Overlay;
+  private banks: THREE.Group[] = [];
+  private tuningPanel: TuningPanel | null = null;
+  private tuningDirty = false;
+  private banksDirty = false;
+  private nextDiagnosticsAt = 0;
+
+  private basePixelRatio = 1;
+  private pixelRatio = 1;
+  private perfSamples = 0;
+  private slowFrames = 0;
 
   private downX = 0;
   private downY = 0;
@@ -119,8 +139,18 @@ export class Game {
     this.canvas.id = "game-canvas";
     container.appendChild(this.canvas);
 
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, powerPreference: "high-performance" });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    // MSAA on a 2x+ screen buys very little and costs real fill rate on a
+    // mid-range phone, where the device pixel ratio is already doing the
+    // smoothing. Desktop (1x) keeps it.
+    const dpr = window.devicePixelRatio || 1;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas: this.canvas,
+      antialias: dpr < 2,
+      powerPreference: "high-performance",
+    });
+    this.basePixelRatio = Math.min(dpr, 2);
+    this.pixelRatio = this.basePixelRatio;
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
@@ -130,17 +160,19 @@ export class Game {
     this.scene.fog = new THREE.Fog(0xbfe8fa, 26, 52);
 
     const aspect = container.clientWidth / Math.max(container.clientHeight, 1);
+    applyAspectPreset(aspect);
     this.camera = createCamera(aspect);
 
     addLights(this.scene);
     addSunGlow(this.scene);
     this.clouds = scatterClouds(this.scene);
 
-    this.scene.add(buildBank(LEFT_BANK_SPEC));
-    this.scene.add(buildBank(RIGHT_BANK_SPEC));
+    this.banks = [buildBank(LEFT_BANK_SPEC), buildBank(RIGHT_BANK_SPEC)];
+    this.banks.forEach((bank) => this.scene.add(bank));
 
     this.water = buildWater();
     this.scene.add(this.water.mesh);
+    this.syncWaterToBankDepth();
     scatterFoam(this.scene);
 
     this.boat = buildBoat();
@@ -162,7 +194,7 @@ export class Game {
         walkTo: new THREE.Vector3(),
         walkStart: 0,
         walkDur: 0.75,
-        walkFacing: IDLE_FACING_Y,
+        walkFacing: idleFacingY(),
       });
     });
     this.placeAllAtHome();
@@ -171,8 +203,19 @@ export class Game {
     this.overlay = createOverlay(container);
     this.overlay.rowButton.addEventListener("click", () => this.onRowClicked());
     this.overlay.retryButton.addEventListener("click", () => this.retry());
+    this.overlay.resetButton.addEventListener("click", () => this.retry());
     this.updateRowButton();
     this.setupGrowthAndSharing();
+
+    // Applying on the next frame rather than inside the listener keeps a
+    // slider drag — or a resize re-blending the preset — to one scene
+    // update per rendered frame. Registered even without the harness,
+    // since a resize changes the tuned values on its own.
+    onTuningChange((key: TuningKey) => {
+      this.tuningDirty = true;
+      if (key === "bankHalfDepth") this.banksDirty = true;
+    });
+    if (tuningEnabled()) this.tuningPanel = createTuningPanel(container);
 
     this.canvas.addEventListener("pointerdown", (e) => {
       unlockAudio();
@@ -185,6 +228,17 @@ export class Game {
       const dx = e.clientX - this.downX;
       const dy = e.clientY - this.downY;
       if (Math.abs(dx) + Math.abs(dy) < 6) this.handleTap(e);
+    });
+
+    // A backgrounded tab or a GPU reset takes the context away; three can
+    // restore itself, but only if the default "give up" is prevented and
+    // the loop is parked until the context is back.
+    this.canvas.addEventListener("webglcontextlost", (e) => {
+      e.preventDefault();
+      this.renderer.setAnimationLoop(null);
+    });
+    this.canvas.addEventListener("webglcontextrestored", () => {
+      this.renderer.setAnimationLoop(() => this.animate());
     });
 
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -204,7 +258,7 @@ export class Game {
   private resetCharacterVisual(entry: CharacterEntry, worldSide: WorldSide): void {
     const slot = homeSlot(entry.id, worldSide);
     entry.rig.root.position.set(slot.x, CHAR_HEIGHT_Y, slot.z);
-    entry.rig.root.rotation.set(0, IDLE_FACING_Y, 0);
+    entry.rig.root.rotation.set(0, idleFacingY(), 0);
     entry.rig.root.scale.setScalar(entry.rig.baseScale);
     entry.state = "idle";
     entry.seatIndex = -1;
@@ -393,14 +447,21 @@ export class Game {
     });
   }
 
+  /**
+   * One sprite, reused. Building a fresh canvas texture and material per
+   * violation leaked both every time — the old sprite left the scene but
+   * its GPU texture never did, so a long session climbed steadily.
+   */
   private spawnHeart(position: THREE.Vector3): void {
-    if (this.heartSprite) this.scene.remove(this.heartSprite);
-    const tex = makeHeartTexture();
-    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
+    if (!this.heartSprite) {
+      const material = new THREE.SpriteMaterial({ map: getHeartTexture(), transparent: true, depthWrite: false });
+      this.heartSprite = new THREE.Sprite(material);
+    }
+    const sprite = this.heartSprite;
+    (sprite.material as THREE.SpriteMaterial).opacity = 1;
     sprite.scale.set(0.001, 0.001, 1);
     sprite.position.set(position.x, position.y + 1.15, position.z);
-    this.scene.add(sprite);
-    this.heartSprite = sprite;
+    if (!sprite.parent) this.scene.add(sprite);
   }
 
   // ---------- retry ----------
@@ -412,10 +473,7 @@ export class Game {
     this.boatMoving = false;
     this.pendingOutcome = null;
     this.kissSeq = null;
-    if (this.heartSprite) {
-      this.scene.remove(this.heartSprite);
-      this.heartSprite = null;
-    }
+    if (this.heartSprite) this.scene.remove(this.heartSprite);
     this.placeAllAtHome();
     this.dockBoat();
     this.gamePhase = "boarding";
@@ -423,11 +481,14 @@ export class Game {
     this.overlay.hideWin();
     this.updateRowButton();
 
+    // Only a puzzle that was actually under way counts as a fresh attempt
+    // — resetting an untouched board would double-count the load.
+    const wasUnderWay = this.startTimeMs !== null;
     this.moveCount = 0;
     this.startTimeMs = null;
     this.lastWinResult = null;
     this.shareBlob = null;
-    postEvent("attempt");
+    if (wasUnderWay) postEvent("attempt");
   }
 
   private ensureTimerStarted(): void {
@@ -534,6 +595,102 @@ export class Game {
     this.overlay.setRowEnabled(enabled);
   }
 
+  // ---------- tuning harness ----------
+
+  /** Which bank a person is standing on right now, in world terms. */
+  private worldSideOf(id: PersonId): WorldSide {
+    const engineSide: BankSide = this.engineState.left.has(id) ? "left" : "right";
+    return toWorldSide(engineSide);
+  }
+
+  /**
+   * Re-apply tuned camera + couple spacing to the live scene. Anyone who
+   * is standing still gets moved to their new slot outright; anyone
+   * walking, seated or mid-kiss is left alone — they resolve to the new
+   * slots on their next move, and a snap mid-animation looks broken.
+   */
+  /**
+   * Keep the river as long as the banks are deep, so winding the bank
+   * depth up doesn't leave the water stopping short in mid-scene. (The
+   * scattered foam chevrons stay where they are — they read as specks.)
+   */
+  private syncWaterToBankDepth(): void {
+    const bankLength = Math.round(tuning.bankHalfDepth) * 2 + 1;
+    this.water.mesh.scale.z = bankLength / WATER_LEN;
+  }
+
+  /** Bank tiles are built geometry, so a depth change means rebuilding them. */
+  private rebuildBanks(): void {
+    this.banks.forEach((bank) => {
+      this.scene.remove(bank);
+      disposeMerged(bank);
+    });
+    this.banks = [buildBank(LEFT_BANK_SPEC), buildBank(RIGHT_BANK_SPEC)];
+    this.banks.forEach((bank) => this.scene.add(bank));
+  }
+
+  private applyTuning(): void {
+    if (this.banksDirty) {
+      this.banksDirty = false;
+      this.rebuildBanks();
+      this.syncWaterToBankDepth();
+    }
+    syncCameraPose(this.camera);
+    this.resize();
+    this.chars.forEach((entry) => {
+      if (entry.state !== "idle") return;
+      const slot = homeSlot(entry.id, this.worldSideOf(entry.id));
+      entry.rig.root.position.set(slot.x, CHAR_HEIGHT_Y, slot.z);
+    });
+  }
+
+  /**
+   * Measure how close the idle characters come to the frame edge, which is
+   * the thing the harness is really for: "it clips on mobile" is this
+   * number going over 1.0 at a phone aspect ratio.
+   */
+  private updateDiagnostics(): void {
+    const panel = this.tuningPanel;
+    if (!panel) return;
+    const w = this.canvas.clientWidth || window.innerWidth;
+    const h = this.canvas.clientHeight || window.innerHeight;
+
+    // Screen-right in world space, so the character's width is measured
+    // across the frame rather than along the axis it happens to face.
+    const right = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0).setY(0).normalize();
+    const probe = new THREE.Vector3();
+    let worstX = 0;
+    let worstY = 0;
+    const clipped: string[] = [];
+
+    allHomeSlots(ALL_PERSON_IDS).forEach(({ id, side, slot }) => {
+      let personWorst = 0;
+      for (const dy of [0, CHAR_TOP_Y]) {
+        for (const dw of [-CHAR_HALF_W, CHAR_HALF_W]) {
+          probe.set(slot.x + right.x * dw, CHAR_HEIGHT_Y + dy, slot.z + right.z * dw).project(this.camera);
+          worstX = Math.max(worstX, Math.abs(probe.x));
+          worstY = Math.max(worstY, Math.abs(probe.y));
+          personWorst = Math.max(personWorst, Math.abs(probe.x), Math.abs(probe.y));
+        }
+      }
+      if (personWorst > 1) clipped.push(`${id}/${side}`);
+    });
+
+    panel.setDiagnostics({
+      widthPx: Math.round(w),
+      heightPx: Math.round(h),
+      aspect: w / Math.max(h, 1),
+      frustum: computeFrustumSize(w / Math.max(h, 1)),
+      worstX,
+      worstY,
+      clipped,
+      drawCalls: this.renderer.info.render.calls,
+      triangles: this.renderer.info.render.triangles,
+      geometries: this.renderer.info.memory.geometries,
+      textures: this.renderer.info.memory.textures,
+    });
+  }
+
   // ---------- resize ----------
 
   private resize(): void {
@@ -541,15 +698,31 @@ export class Game {
     const w = container?.clientWidth ?? window.innerWidth;
     const h = container?.clientHeight ?? window.innerHeight;
     if (!w || !h) return;
+    applyAspectPreset(w / h);
+    syncCameraPose(this.camera);
     resizeCamera(this.camera, w / h);
     this.renderer.setSize(w, h, false);
+    this.nextDiagnosticsAt = 0;
   }
 
   // ---------- animate ----------
 
   private animate(): void {
-    const dt = Math.min(this.clock.getDelta(), 0.05);
+    const rawDelta = this.clock.getDelta();
+    const dt = Math.min(rawDelta, 0.05);
     const t = this.clock.elapsedTime;
+
+    this.trackFrameRate(rawDelta);
+
+    if (this.tuningDirty) {
+      this.tuningDirty = false;
+      this.applyTuning();
+      this.nextDiagnosticsAt = 0;
+    }
+    if (this.tuningPanel && t >= this.nextDiagnosticsAt) {
+      this.nextDiagnosticsAt = t + 0.2;
+      this.updateDiagnostics();
+    }
 
     this.water.uniforms.uTime.value = t;
 
@@ -570,6 +743,28 @@ export class Game {
     updateClouds(this.clouds, dt);
 
     this.renderer.render(this.scene, this.camera);
+  }
+
+  /**
+   * Back off render resolution on a device that cannot hold frame rate.
+   * One-way: a phone that drops to 1x stays there, because stepping back
+   * up on a brief recovery just oscillates. Frames longer than 100ms are
+   * stalls (tab switch, GC pause), not a frame-rate signal.
+   */
+  private trackFrameRate(rawDelta: number): void {
+    if (this.pixelRatio <= MIN_PIXEL_RATIO) return;
+    if (rawDelta <= 0 || rawDelta > 0.1) return;
+    this.perfSamples++;
+    if (rawDelta > 1 / 45) this.slowFrames++;
+    if (this.perfSamples < 120) return;
+
+    if (this.slowFrames > 60) {
+      this.pixelRatio = Math.max(MIN_PIXEL_RATIO, this.pixelRatio - 0.25);
+      this.renderer.setPixelRatio(this.pixelRatio);
+      this.resize();
+    }
+    this.perfSamples = 0;
+    this.slowFrames = 0;
   }
 
   private updateCharacter(entry: CharacterEntry, t: number, _dt: number): void {
@@ -614,7 +809,7 @@ export class Game {
     if (entry.state === "seated") {
       const seat = BOAT_LOCAL_SEATS[entry.seatIndex];
       root.position.set(this.boat.position.x + seat.x, this.boat.position.y + BOAT_FLOOR_H, this.boat.position.z + seat.z);
-      root.rotation.y = IDLE_FACING_Y;
+      root.rotation.y = idleFacingY();
       root.rotation.z = this.boat.rotation.z;
       return;
     }
@@ -625,14 +820,14 @@ export class Game {
         const pulse = 1 + Math.max(0, Math.sin(elapsed * 6)) * 0.12 * Math.max(0, 1 - elapsed / 1.2);
         root.scale.setScalar(entry.rig.baseScale * pulse);
       }
-      root.rotation.y = IDLE_FACING_Y;
+      root.rotation.y = idleFacingY();
       return;
     }
 
     // idle — sturdy on the ground, facing the camera, with only a gentle
     // glance and arm sway on top of that — no vertical bob.
     root.position.y = CHAR_HEIGHT_Y;
-    root.rotation.y = IDLE_FACING_Y;
+    root.rotation.y = idleFacingY();
     entry.rig.head.rotation.y = Math.sin(t * 0.7 + entry.rig.idlePhase) * 0.16;
     entry.rig.armL.rotation.x = Math.sin(t * 1.0 + entry.rig.idlePhase) * 0.05;
     entry.rig.armR.rotation.x = Math.sin(t * 1.0 + entry.rig.idlePhase + 1.4) * 0.05;
@@ -676,10 +871,29 @@ export class Game {
   }
 
   dispose(): void {
+    this.tuningPanel?.destroy();
     this.resizeObserver.disconnect();
     this.renderer.setAnimationLoop(null);
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh && !(obj as THREE.Sprite).isSprite) return;
+      mesh.geometry?.dispose();
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((m) => {
+        (m as THREE.MeshStandardMaterial)?.map?.dispose();
+        m?.dispose();
+      });
+    });
+    this.scene.clear();
     this.renderer.dispose();
   }
+}
+
+let heartTexture: THREE.CanvasTexture | null = null;
+
+function getHeartTexture(): THREE.CanvasTexture {
+  heartTexture = heartTexture ?? makeHeartTexture();
+  return heartTexture;
 }
 
 function makeHeartTexture(): THREE.CanvasTexture {

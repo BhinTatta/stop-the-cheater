@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import { PALETTE, darken, hash, mat, place } from "./palette";
 import { buildBush, buildFlower, buildPebble, buildReed, buildTree, buildTuft } from "./props";
+import { tuning } from "./tuning";
+import { mergeStatic } from "./merge";
 
 const GRASS_LIGHT = mat(PALETTE.grassLight);
 const GRASS_DARK = mat(PALETTE.grassDark);
@@ -8,7 +10,19 @@ const GRASS_WET_LIGHT = mat(darken(PALETTE.grassLight, 0.18));
 const GRASS_WET_DARK = mat(darken(PALETTE.grassDark, 0.18));
 const dirtBands = PALETTE.dirt.map((c) => mat(c));
 
-const ROWS_Z = [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+/**
+ * How far each bank runs along Z. Tuned rather than fixed: at a camera
+ * azimuth near 90 the Z axis IS screen-horizontal, so a bank that stops at
+ * z=±4 leaves sky down both sides of a landscape window. Deeper banks cost
+ * draw calls (four boxes per tile), which is why it is a dial and not just
+ * a bigger number.
+ */
+function rowsZ(): number[] {
+  const half = Math.round(tuning.bankHalfDepth);
+  const rows: number[] = [];
+  for (let z = -half; z <= half; z++) rows.push(z);
+  return rows;
+}
 const FLOWER_COLORS = ["#FFFFFF", PALETTE.trim, "#FF6FA8"];
 
 export interface BankSpec {
@@ -18,10 +32,20 @@ export interface BankSpec {
   bushSpots?: [number, number][];
 }
 
+/**
+ * A bank is authored as one mesh per tile, band and prop, then merged
+ * down to a handful of draw calls before it reaches the scene — see
+ * merge.ts. Nothing on a bank moves, so there is nothing to lose by it.
+ */
 export function buildBank(spec: BankSpec): THREE.Group {
+  return mergeStatic(buildBankMeshes(spec), "bank").group;
+}
+
+function buildBankMeshes(spec: BankSpec): THREE.Group {
   const group = new THREE.Group();
+  const rows = rowsZ();
   spec.xs.forEach((x) => {
-    ROWS_Z.forEach((z) => {
+    rows.forEach((z) => {
       const isEdge = Math.abs(x - spec.riverEdgeX) < 0.01;
       // Alternating two-tone checker, not random jitter — the flat,
       // deliberately-patterned ground read is what the reference has and a

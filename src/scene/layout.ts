@@ -1,4 +1,5 @@
 import { getPerson, type PersonId, type Color } from "../engine";
+import { tuning } from "./tuning";
 
 /**
  * World-space side — which half of X=0 something sits on. NOT the same as
@@ -9,32 +10,44 @@ import { getPerson, type PersonId, type Color } from "../engine";
  */
 export type WorldSide = "left" | "right";
 
-/**
- * Three couples at the corners of a triangle — one near the water
- * (closest to the boat), the other two spread wide further back — rather
- * than all three couples sitting in a single line across the bank.
- * Kept inside the horizontal frustum at the default (unzoomed) framing;
- * verified against several real phone aspect ratios (see SPEC.md).
- */
-const CORNER: Record<Color, { x: number; zCenter: number; pairGap: number }> = {
-  red: { x: 2.6, zCenter: 0, pairGap: 0.8 }, // near-water apex
-  green: { x: 4.1, zCenter: -1.1, pairGap: 0.5 }, // back-left corner
-  blue: { x: 4.1, zCenter: 1.1, pairGap: 0.5 }, // back-right corner
-};
-
 export interface Slot {
   x: number;
   z: number;
 }
 
+/**
+ * Three couples at the corners of a triangle — one near the water
+ * (closest to the boat), the other two spread wide further back — rather
+ * than all three couples sitting in a single line across the bank.
+ *
+ * The spread itself (how far back, how far apart, how far each partner
+ * stands from the other) is tuned live — see src/scene/tuning.ts.
+ */
+function corner(color: Color): { x: number; zCenter: number; pairGap: number } {
+  switch (color) {
+    case "red": // near-water apex
+      return { x: tuning.frontX, zCenter: 0, pairGap: tuning.frontPairGap };
+    case "green": // back-left corner
+      return { x: tuning.backX, zCenter: -tuning.backSpreadZ, pairGap: tuning.backPairGap };
+    case "blue": // back-right corner
+      return { x: tuning.backX, zCenter: tuning.backSpreadZ, pairGap: tuning.backPairGap };
+  }
+}
+
 /** Where a person stands when idle on the given world-space bank. */
 export function homeSlot(personId: PersonId, side: WorldSide): Slot {
   const person = getPerson(personId);
-  const spec = CORNER[person.color];
+  const spec = corner(person.color);
   const sign = person.gender === "man" ? -1 : 1;
   const x = side === "right" ? spec.x : -spec.x;
   const z = spec.zCenter + (sign * spec.pairGap) / 2;
   return { x, z };
+}
+
+/** Every idle home slot on both banks — what the tuning harness checks for clipping. */
+export function allHomeSlots(personIds: readonly PersonId[]): { id: PersonId; side: WorldSide; slot: Slot }[] {
+  const sides: WorldSide[] = ["right", "left"];
+  return sides.flatMap((side) => personIds.map((id) => ({ id, side, slot: homeSlot(id, side) })));
 }
 
 export const CHAR_HEIGHT_Y = 0.5; // feet-on-ground baseline, matches bank tile top
