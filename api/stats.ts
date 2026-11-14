@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { BEST_TIME_KEY, COMPLETIONS_KEY, FAILS_KEY, PLAYS_KEY, getRedis } from "./_redis";
+import { BEST_TIME_KEY, COMPLETIONS_KEY, FAILS_KEY, PLAYS_KEY, getRedis } from "./_redis.js";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "GET") {
