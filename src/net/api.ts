@@ -1,4 +1,4 @@
-export type GameEventType = "attempt" | "complete";
+export type GameEventType = "attempt" | "fail" | "complete";
 
 /**
  * Fire-and-forget: the game must be fully playable with the backend
@@ -22,6 +22,7 @@ export interface GameStats {
    * then placeholders and shouldn't be shown. */
   enabled: boolean;
   plays: number;
+  fails: number;
   completions: number;
   bestTime: number | null;
 }
@@ -35,6 +36,7 @@ export async function fetchStats(): Promise<GameStats | null> {
     return {
       enabled: true,
       plays: stats.plays ?? 0,
+      fails: stats.fails ?? 0,
       completions: stats.completions ?? 0,
       bestTime: stats.bestTime ?? null,
     };

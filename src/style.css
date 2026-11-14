@@ -372,3 +372,64 @@ body {
   color: var(--text-muted);
   text-wrap: balance;
 }
+
+/* ---------- info button, rules, fail stats ---------- */
+
+#info-btn {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 800;
+  font-size: 18px;
+  font-style: italic;
+  line-height: 1;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+
+#rules-panel {
+  z-index: 11;
+}
+
+.rules-list {
+  list-style: none;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: left;
+  font-family: "Nunito", sans-serif;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.rules-list li::before {
+  content: "• ";
+  color: var(--accent);
+}
+
+.gameover-stat {
+  font-family: "Baloo 2", sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.gameover-stat b {
+  color: var(--accent);
+  font-size: 22px;
+}
+
+.gameover-failed {
+  font-family: "Nunito", sans-serif;
+  font-size: 14px;
+  color: var(--text-muted);
+}

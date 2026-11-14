@@ -38,6 +38,8 @@ import { fetchStats, postEvent } from "../net/api";
 import { generateShareImage } from "../share/shareImage";
 import { buildChallengeUrl, challengeBannerText, parseChallengeFromUrl, resultSentence } from "../share/challenge";
 
+const FAIL_COUNT_SEED = 2000;
+
 type CharState = "idle" | "walkingToBoat" | "seated" | "walkingToBank" | "walkingToKiss" | "kissPose";
 
 interface CharacterEntry {
@@ -111,6 +113,7 @@ export class Game {
   private kissSeq: KissSequence | null = null;
   private heartSprite: THREE.Sprite | null = null;
 
+  private failCount = FAIL_COUNT_SEED;
   private moveCount = 0;
   private startTimeMs: number | null = null;
   private lastWinResult: { moves: number; timeSeconds: number } | null = null;
@@ -500,10 +503,14 @@ export class Game {
   private setupGrowthAndSharing(): void {
     postEvent("attempt");
 
-    // Null when no stats store is configured (fetchStats filters that out),
-    // in which case the badge simply never appears.
+    // Seeded so the badge never looks empty at launch. Hype counter, not a
+    // real metric: refreshes/retries all inflate it and that's fine.
+    this.overlay.setFailCount(this.failCount);
     fetchStats().then((stats) => {
-      if (stats) this.overlay.setPlayCount(2000 + stats.plays);
+      if (stats) {
+        this.failCount = FAIL_COUNT_SEED + stats.fails;
+        this.overlay.setFailCount(this.failCount);
+      }
     });
 
     this.overlay.onNameChange((name) => this.pregenerateShareImage(name));
@@ -865,6 +872,10 @@ export class Game {
       this.kissSeq = null;
       this.gamePhase = "gameover";
       playGameOverSting();
+      this.failCount += 1;
+      postEvent("fail");
+      this.overlay.setFailCount(this.failCount);
+      this.overlay.setGameOverStats(this.failCount);
       this.overlay.showGameOver();
       this.updateRowButton();
     }

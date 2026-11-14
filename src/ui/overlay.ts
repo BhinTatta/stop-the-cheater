@@ -19,7 +19,8 @@ export interface Overlay {
   onCopyLinkClick(cb: () => void): void;
   flashShareLabel(text: string): void;
   flashCopied(): void;
-  setPlayCount(n: number): void;
+  setFailCount(n: number): void;
+  setGameOverStats(failCount: number): void;
   showChallengeBanner(text: string, onDismiss: () => void): void;
 }
 
@@ -29,6 +30,9 @@ function resetIconSvg(): string {
     <path d="M3 4v5h5"></path>
   </svg>`;
 }
+
+// Hype number, deliberately fixed (not computed from real data).
+const PASS_RATE = "0.7%";
 
 function paddleIconSvg(): string {
   return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
@@ -67,6 +71,35 @@ export function createOverlay(container: HTMLElement): Overlay {
   playCountBadge.hidden = true;
   container.appendChild(playCountBadge);
 
+  const infoButton = document.createElement("button");
+  infoButton.id = "info-btn";
+  infoButton.type = "button";
+  infoButton.setAttribute("aria-label", "How to play");
+  infoButton.textContent = "i";
+  container.appendChild(infoButton);
+
+  const rulesPanel = document.createElement("div");
+  rulesPanel.id = "rules-panel";
+  rulesPanel.className = "end-panel";
+  rulesPanel.innerHTML = `
+    <p class="end-eyebrow">How to play</p>
+    <h2>Get all 6 across the river</h2>
+    <ul class="rules-list">
+      <li>The boat carries <b>1 or 2</b> people and can't cross empty.</li>
+      <li>A woman left without her man will <b>cheat</b> if any other man is on her bank.</li>
+      <li>Someone has to <b>bring the boat back</b> from the other side every trip.</li>
+      <li>It's checked the moment the boat leaves <i>and</i> when it lands.</li>
+      <li>Get everyone to the right bank to win.</li>
+    </ul>
+  `;
+  const rulesClose = document.createElement("button");
+  rulesClose.type = "button";
+  rulesClose.textContent = "Got it";
+  rulesPanel.appendChild(rulesClose);
+  container.appendChild(rulesPanel);
+  infoButton.addEventListener("click", () => rulesPanel.classList.add("visible"));
+  rulesClose.addEventListener("click", () => rulesPanel.classList.remove("visible"));
+
   const challengeBanner = document.createElement("div");
   challengeBanner.id = "challenge-banner";
   const challengeText = document.createElement("p");
@@ -84,10 +117,12 @@ export function createOverlay(container: HTMLElement): Overlay {
   const retryButton = document.createElement("button");
   retryButton.id = "retry-btn";
   retryButton.type = "button";
-  retryButton.textContent = "Retry";
+  retryButton.textContent = "Try again";
   gameOverPanel.innerHTML = `
     <p class="end-eyebrow">Game Over</p>
     <h2>Couldn't Stop the Cheater!</h2>
+    <p id="gameover-stat" class="gameover-stat"></p>
+    <p id="gameover-failed" class="gameover-failed"></p>
   `;
   gameOverPanel.appendChild(retryButton);
   container.appendChild(gameOverPanel);
@@ -119,6 +154,8 @@ export function createOverlay(container: HTMLElement): Overlay {
   // Win screen retry routes through the same button so it isn't a dead end.
   winRetryButton.addEventListener("click", () => retryButton.click());
 
+  const gameOverStat = gameOverPanel.querySelector<HTMLParagraphElement>("#gameover-stat")!;
+  const gameOverFailed = gameOverPanel.querySelector<HTMLParagraphElement>("#gameover-failed")!;
   const winMovesEl = winPanel.querySelector<HTMLSpanElement>("#win-moves")!;
   const winTimeEl = winPanel.querySelector<HTMLSpanElement>("#win-time")!;
   const nameInput = winPanel.querySelector<HTMLInputElement>("#win-name-input")!;
@@ -222,9 +259,13 @@ export function createOverlay(container: HTMLElement): Overlay {
         copyBtn.textContent = original;
       }, 1400);
     },
-    setPlayCount(n: number) {
-      playCountBadge.textContent = `${n.toLocaleString()} people have tried`;
+    setFailCount(n: number) {
+      playCountBadge.textContent = `💔 ${n.toLocaleString()} people failed`;
       playCountBadge.hidden = false;
+    },
+    setGameOverStats(failCount: number) {
+      gameOverStat.innerHTML = `Only <b>${PASS_RATE}</b> of people actually pass this.`;
+      gameOverFailed.textContent = `${failCount.toLocaleString()} have failed so far. Think you can beat it?`;
     },
     showChallengeBanner(text: string, onDismiss: () => void) {
       // `text` may embed an untrusted URL-supplied name — textContent only,

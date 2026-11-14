@@ -1,6 +1,7 @@
 import { Redis } from "@upstash/redis";
 
 export const PLAYS_KEY = "stop-the-cheater:plays";
+export const FAILS_KEY = "stop-the-cheater:fails";
 export const COMPLETIONS_KEY = "stop-the-cheater:completions";
 export const BEST_TIME_KEY = "stop-the-cheater:best_time";
 
