@@ -1,4 +1,4 @@
-export type GameEventType = "attempt" | "complete";
+export type GameEventType = "attempt" | "fail" | "complete";
 
 /**
  * Fire-and-forget: the game must be fully playable with the backend
@@ -19,6 +19,7 @@ export async function postEvent(type: GameEventType, timeSeconds?: number): Prom
 
 export interface GameStats {
   plays: number;
+  fails: number;
   completions: number;
   bestTime: number | null;
 }

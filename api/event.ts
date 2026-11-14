@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
-import { BEST_TIME_KEY, COMPLETIONS_KEY, PLAYS_KEY, redis } from "./_redis";
+import { BEST_TIME_KEY, COMPLETIONS_KEY, FAILS_KEY, PLAYS_KEY, redis } from "./_redis";
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== "POST") {
@@ -7,8 +7,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return;
   }
 
-  const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : req.body ?? {};
+  let body: unknown = req.body ?? {};
+  if (typeof body === "string") {
+    try {
+      body = JSON.parse(body || "{}");
+    } catch {
+      res.status(400).json({ error: "Invalid JSON" });
+      return;
+    }
+  }
   const { type, timeSeconds } = body as { type?: string; timeSeconds?: number };
+
+  try {
+    await handleEvent(type, timeSeconds, res);
+  } catch {
+    // Redis down/misconfigured: the game must still work, so don't 500 loudly.
+    res.status(200).json({ ok: false });
+  }
+}
+
+async function handleEvent(type: string | undefined, timeSeconds: number | undefined, res: VercelResponse) {
+  if (type === "fail") {
+    await redis.incr(FAILS_KEY);
+    res.status(200).json({ ok: true });
+    return;
+  }
 
   if (type === "attempt") {
     await redis.incr(PLAYS_KEY);
